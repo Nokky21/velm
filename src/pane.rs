@@ -48,8 +48,9 @@ pub(crate) use self::terminal::test_encode_key_for_app;
 pub use self::terminal::InputState;
 use self::terminal::{GhosttyPaneTerminal, PaneTerminal};
 pub(crate) use self::terminal::{
-    TerminalCompressionStep, TerminalDirtyPatch, TerminalDirtyPatchOutcome, TerminalReadSnapshot,
-    TerminalSearchDirection, TerminalSearchWindow, TerminalTextPoint, TerminalWordMotion,
+    LastCommandOutput, TerminalCompressionStep, TerminalDirtyPatch, TerminalDirtyPatchOutcome,
+    TerminalReadSnapshot, TerminalSearchDirection, TerminalSearchWindow, TerminalTextPoint,
+    TerminalWordMotion,
 };
 pub use self::{
     state::PaneState,
@@ -3579,6 +3580,16 @@ impl PaneRuntime {
 
     pub fn extract_selection(&self, selection: &crate::selection::Selection) -> Option<String> {
         let result = self.terminal.extract_selection(selection);
+        self.compression.wake();
+        result
+    }
+
+    pub fn has_osc133_marks(&self) -> bool {
+        self.terminal.ghostty.has_osc133_marks()
+    }
+
+    pub(crate) fn last_command_output(&self) -> Option<LastCommandOutput> {
+        let result = self.terminal.ghostty.last_command_output();
         self.compression.wake();
         result
     }

@@ -9,6 +9,7 @@ use crate::api::schema::InstalledPluginInfo;
 const LEASE_FILE: &str = ".in-use";
 pub(crate) type Leases = HashMap<PathBuf, Arc<File>>;
 
+#[allow(dead_code)]
 pub(crate) fn create_lease(installation: &Path) -> io::Result<File> {
     let file = OpenOptions::new()
         .create_new(true)

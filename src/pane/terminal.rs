@@ -35,7 +35,8 @@ use super::{
         current_transient_default_color_owner, parse_reported_cwd,
         restore_host_terminal_theme_if_needed, write_host_terminal_theme_selective,
         AgentOscStateTracker, DefaultColorEvent, DefaultColorEventTracker, DefaultColorOscTracker,
-        DefaultColorQuery, DefaultColorTrackedEvent, OscDebugTracker,
+        DefaultColorQuery, DefaultColorTrackedEvent, Osc133Event, Osc133EventTracker,
+        Osc133TrackedEvent, OscDebugTracker,
     },
     xtgettcap::{C1XtgettcapQueryTracker, C1XtgettcapResponse},
 };
@@ -178,6 +179,253 @@ pub(crate) struct TerminalReadSnapshot {
     pub truncated: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct LastCommandOutput {
+    pub command: Option<String>,
+    pub exit_code: Option<i32>,
+    pub output: String,
+    pub truncated: bool,
+}
+
+struct TrackedCursorAnchor {
+    grid_ref: crate::ghostty::TrackedGridRef,
+    pending_wrap: bool,
+}
+
+impl TrackedCursorAnchor {
+    fn capture(terminal: &crate::ghostty::Terminal) -> Option<Self> {
+        let (x, y) = terminal.cursor_screen_point().ok()?;
+        let pending_wrap = terminal.cursor_pending_wrap().unwrap_or(false);
+        let grid_ref = terminal.track_screen_point(x, y).ok()?;
+        Some(Self {
+            grid_ref,
+            pending_wrap,
+        })
+    }
+
+    fn resolve(&self) -> Option<(u16, u32, bool)> {
+        self.grid_ref
+            .screen_point()
+            .ok()
+            .flatten()
+            .map(|(x, y)| (x, y, self.pending_wrap))
+    }
+}
+
+enum ShellZonePhase {
+    Idle,
+    InPrompt,
+    InInput {
+        input_start: Option<TrackedCursorAnchor>,
+    },
+    InCommand {
+        command: Option<String>,
+        output_start: Option<TrackedCursorAnchor>,
+    },
+}
+
+struct CompletedCommandZone {
+    command: Option<String>,
+    output_start: Option<TrackedCursorAnchor>,
+    output_end: Option<TrackedCursorAnchor>,
+    exit_code: Option<i32>,
+    cleared: bool,
+}
+
+pub(crate) struct ShellCommandTracker {
+    has_marks: bool,
+    phase: ShellZonePhase,
+    last_command: Option<CompletedCommandZone>,
+}
+
+impl Default for ShellCommandTracker {
+    fn default() -> Self {
+        Self {
+            has_marks: false,
+            phase: ShellZonePhase::Idle,
+            last_command: None,
+        }
+    }
+}
+
+impl ShellCommandTracker {
+    pub(super) fn has_marks(&self) -> bool {
+        self.has_marks
+    }
+
+    pub(super) fn on_clear_screen(&mut self) {
+        if let Some(last) = &mut self.last_command {
+            last.cleared = true;
+        }
+        if let ShellZonePhase::InCommand { output_start, .. } = &mut self.phase {
+            *output_start = None;
+        }
+    }
+
+    pub(super) fn observe_event(
+        &mut self,
+        terminal: &crate::ghostty::Terminal,
+        event: Osc133Event,
+    ) {
+        if terminal.active_screen().ok() != Some(crate::ghostty::ActiveScreen::Primary) {
+            return;
+        }
+        match event {
+            Osc133Event::PromptStart => {
+                self.has_marks = true;
+                if let ShellZonePhase::InCommand {
+                    command,
+                    output_start,
+                } = std::mem::replace(&mut self.phase, ShellZonePhase::InPrompt)
+                {
+                    let output_end = TrackedCursorAnchor::capture(terminal);
+                    self.last_command = Some(CompletedCommandZone {
+                        command,
+                        output_start,
+                        output_end,
+                        exit_code: None,
+                        cleared: false,
+                    });
+                }
+            }
+            Osc133Event::CommandInputStart => {
+                self.has_marks = true;
+                let input_start = TrackedCursorAnchor::capture(terminal);
+                self.phase = ShellZonePhase::InInput { input_start };
+            }
+            Osc133Event::CommandOutputStart => {
+                self.has_marks = true;
+                let command = match &self.phase {
+                    ShellZonePhase::InInput {
+                        input_start: Some(start_anchor),
+                    } => {
+                        if let (Some((sx, sy, _)), Ok((cx, cy))) =
+                            (start_anchor.resolve(), terminal.cursor_screen_point())
+                        {
+                            let c_pending = terminal.cursor_pending_wrap().unwrap_or(false);
+                            read_screen_range_before(terminal, (sx, sy), (cx, cy), c_pending)
+                                .ok()
+                                .map(|s| s.trim().to_string())
+                                .filter(|s| !s.is_empty())
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                };
+                let output_start = TrackedCursorAnchor::capture(terminal);
+                self.phase = ShellZonePhase::InCommand {
+                    command,
+                    output_start,
+                };
+            }
+            Osc133Event::CommandFinished { exit_code } => {
+                self.has_marks = true;
+                if let ShellZonePhase::InCommand {
+                    command,
+                    output_start,
+                } = std::mem::replace(&mut self.phase, ShellZonePhase::Idle)
+                {
+                    let output_end = TrackedCursorAnchor::capture(terminal);
+                    self.last_command = Some(CompletedCommandZone {
+                        command,
+                        output_start,
+                        output_end,
+                        exit_code,
+                        cleared: false,
+                    });
+                } else {
+                    self.phase = ShellZonePhase::Idle;
+                }
+            }
+            Osc133Event::ClearDisplay { erase_scrollback } => {
+                if let ShellZonePhase::InCommand { output_start, .. } = &mut self.phase {
+                    *output_start = TrackedCursorAnchor::capture(terminal);
+                } else if erase_scrollback {
+                    if let Some(last) = &mut self.last_command {
+                        last.cleared = true;
+                    }
+                }
+            }
+        }
+    }
+
+    pub(super) fn last_command_output(
+        &self,
+        terminal: &crate::ghostty::Terminal,
+    ) -> Option<LastCommandOutput> {
+        if !self.has_marks {
+            return None;
+        }
+        let last = self.last_command.as_ref()?;
+        if last.cleared {
+            return Some(LastCommandOutput {
+                command: last.command.clone(),
+                exit_code: last.exit_code,
+                output: String::new(),
+                truncated: false,
+            });
+        }
+        let Some((ex, ey, end_pending_wrap)) =
+            last.output_end.as_ref().and_then(TrackedCursorAnchor::resolve)
+        else {
+            return Some(LastCommandOutput {
+                command: last.command.clone(),
+                exit_code: last.exit_code,
+                output: String::new(),
+                truncated: true,
+            });
+        };
+        let (start, truncated) = match last.output_start.as_ref().and_then(TrackedCursorAnchor::resolve)
+        {
+            Some((sx, sy, _)) => ((sx, sy), false),
+            None => ((0, 0), true),
+        };
+        let output = read_screen_range_before(terminal, start, (ex, ey), end_pending_wrap)
+            .unwrap_or_default();
+        Some(LastCommandOutput {
+            command: last.command.clone(),
+            exit_code: last.exit_code,
+            output,
+            truncated,
+        })
+    }
+}
+
+fn read_screen_range_before(
+    terminal: &crate::ghostty::Terminal,
+    start: (u16, u32),
+    end_pos: (u16, u32),
+    end_pending_wrap: bool,
+) -> Result<String, crate::ghostty::Error> {
+    let total_rows = terminal.total_rows()?;
+    let cols = terminal.cols()?;
+    if total_rows == 0 || cols == 0 {
+        return Ok(String::new());
+    }
+    let max_col = cols.saturating_sub(1);
+    let max_row = u32::try_from(total_rows.saturating_sub(1)).unwrap_or(u32::MAX);
+    let start = (start.0.min(max_col), start.1.min(max_row));
+    let end_pos = (end_pos.0.min(max_col), end_pos.1.min(max_row));
+
+    let end = if end_pending_wrap {
+        if start.1 > end_pos.1 || (start.1 == end_pos.1 && start.0 > end_pos.0) {
+            return Ok(String::new());
+        }
+        end_pos
+    } else {
+        if start.1 > end_pos.1 || (start.1 == end_pos.1 && start.0 >= end_pos.0) {
+            return Ok(String::new());
+        }
+        if end_pos.0 > 0 {
+            (end_pos.0 - 1, end_pos.1)
+        } else {
+            (max_col, end_pos.1.saturating_sub(1))
+        }
+    };
+    terminal.read_text_screen(start, end, false)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TerminalCompressionStep {
     Busy,
@@ -215,6 +463,8 @@ pub(crate) struct GhosttyPaneCore {
     pub child_default_background_changed: bool,
     pub osc_debug_tracker: OscDebugTracker,
     pub agent_osc_state: AgentOscStateTracker,
+    pub osc133_tracker: Osc133EventTracker,
+    pub shell_commands: ShellCommandTracker,
     decscusr_tracker: DecscusrTracker,
     cursor_settle_state: CursorPositionSettleState,
     windows_powershell_prompt_cwd_reporting: bool,
@@ -1201,6 +1451,8 @@ impl GhosttyPaneTerminal {
                 child_default_background_changed: false,
                 osc_debug_tracker: OscDebugTracker::default(),
                 agent_osc_state: AgentOscStateTracker::default(),
+                osc133_tracker: Osc133EventTracker::default(),
+                shell_commands: ShellCommandTracker::default(),
                 decscusr_tracker: DecscusrTracker::default(),
                 cursor_settle_state: CursorPositionSettleState::default(),
                 windows_powershell_prompt_cwd_reporting: false,
@@ -1350,6 +1602,18 @@ impl GhosttyPaneTerminal {
         }
     }
 
+    pub fn has_osc133_marks(&self) -> bool {
+        self.core
+            .lock()
+            .map(|core| core.shell_commands.has_marks())
+            .unwrap_or(false)
+    }
+
+    pub(crate) fn last_command_output(&self) -> Option<LastCommandOutput> {
+        let core = self.core.lock().ok()?;
+        core.shell_commands.last_command_output(&core.terminal)
+    }
+
     pub fn process_pty_bytes(
         &self,
         pane_id: PaneId,
@@ -1402,7 +1666,9 @@ impl GhosttyPaneTerminal {
         let mut terminal_responses = Vec::new();
         core.default_color_event_tracker.observe(bytes);
         core.c1_xtgettcap_tracker.observe(bytes);
+        core.osc133_tracker.observe(bytes);
         let c1_xtgettcap_responses = core.c1_xtgettcap_tracker.drain_pending();
+        let osc133_events = core.osc133_tracker.drain_pending();
         core.decscusr_tracker.observe(bytes);
         let in_progress_default_color_event = core.default_color_event_tracker.in_progress_event();
         let default_color_events = core.default_color_event_tracker.drain_pending();
@@ -1417,6 +1683,7 @@ impl GhosttyPaneTerminal {
             default_color_events,
             in_progress_default_color_event,
             c1_xtgettcap_responses,
+            osc133_events,
             &mut terminal_responses,
         );
         let terminal_bells = core.terminal.take_bell_count();
@@ -1495,6 +1762,7 @@ impl GhosttyPaneTerminal {
         default_color_events: Vec<DefaultColorTrackedEvent>,
         in_progress_default_color_event: Option<DefaultColorEvent>,
         c1_xtgettcap_responses: Vec<C1XtgettcapResponse>,
+        osc133_events: Vec<Osc133TrackedEvent>,
         terminal_responses: &mut Vec<Bytes>,
     ) {
         // Only legacy C1 replies need merging; ordinary XTGETTCAP remains native.
@@ -1506,6 +1774,7 @@ impl GhosttyPaneTerminal {
                     .into_iter()
                     .map(OrderedColorOrC1Event::C1),
             )
+            .chain(osc133_events.into_iter().map(OrderedColorOrC1Event::Osc133))
             .collect();
         events.sort_by_key(OrderedColorOrC1Event::end_offset);
         let mut written = 0;
@@ -1548,6 +1817,10 @@ impl GhosttyPaneTerminal {
                     if !response.suppress_native {
                         terminal_responses.push(response.bytes);
                     }
+                }
+                OrderedColorOrC1Event::Osc133(event) => {
+                    terminal_responses.extend(libghostty_responses);
+                    core.shell_commands.observe_event(&core.terminal, event.event);
                 }
             }
         }
@@ -1796,6 +2069,7 @@ impl GhosttyPaneTerminal {
             .lock()
             .map_err(|_| "terminal lock poisoned".to_owned())?;
         if core.terminal.clear_screen() {
+            core.shell_commands.on_clear_screen();
             #[cfg(windows)]
             {
                 core.recent_fallback = windows_recent_fallback::Cache::default();
@@ -3357,6 +3631,7 @@ fn ghostty_cell_style(
 enum OrderedColorOrC1Event {
     Color(DefaultColorTrackedEvent),
     C1(C1XtgettcapResponse),
+    Osc133(Osc133TrackedEvent),
 }
 
 impl OrderedColorOrC1Event {
@@ -3364,6 +3639,7 @@ impl OrderedColorOrC1Event {
         match self {
             Self::Color(event) => event.end_offset,
             Self::C1(response) => response.end_offset,
+            Self::Osc133(event) => event.end_offset,
         }
     }
 }
@@ -7620,5 +7896,201 @@ mod tests {
         let mut rows = vec!["hello".to_string(), "".to_string(), "   ".to_string()];
         trim_trailing_blank_rows(&mut rows);
         assert_eq!(rows, vec!["hello".to_string()]);
+    }
+
+    fn load_osc133_fixture_bytes() -> Vec<u8> {
+        let raw = include_str!("../../tests/fixtures/osc133.sample.sintetico.txt");
+        let mut out = String::new();
+        for line in raw.lines() {
+            if line.starts_with('#') || line.trim().is_empty() {
+                continue;
+            }
+            let decoded = line
+                .replace("\\e\\\\", "\x1b\\")
+                .replace("\\e", "\x1b")
+                .replace("\\a", "\x07")
+                .replace("\\n", "\r\n");
+            out.push_str(&decoded);
+        }
+        out.into_bytes()
+    }
+
+    #[test]
+    fn osc133_without_marks_reports_none() {
+        let (tx, _rx) = mpsc::channel(4);
+        let terminal = crate::ghostty::Terminal::new(80, 24, 4096).unwrap();
+        let pane = GhosttyPaneTerminal::new(terminal, tx.clone()).unwrap();
+        pane.process_pty_bytes(PaneId::from_raw(1), 0, b"$ echo hi\r\nhi\r\n", &tx);
+
+        assert!(!pane.has_osc133_marks());
+        assert_eq!(pane.last_command_output(), None);
+    }
+
+    #[test]
+    fn osc133_fixture_tracks_commands_empty_enter_ctrl_c_and_st() {
+        let (tx, _rx) = mpsc::channel(4);
+        let terminal = crate::ghostty::Terminal::new(80, 24, 4096).unwrap();
+        let pane = GhosttyPaneTerminal::new(terminal, tx.clone()).unwrap();
+        let pane_id = PaneId::from_raw(1);
+
+        let fixture = load_osc133_fixture_bytes();
+        // Split at the end of line 5 (after D;1), line 6 (after empty enter + true), and line 7 (after Ctrl+C).
+        let split_d1 = fixture
+            .windows(b"\x1b]133;D;1\x07".len())
+            .position(|w| w == b"\x1b]133;D;1\x07")
+            .unwrap()
+            + b"\x1b]133;D;1\x07".len();
+        let split_empty_enter = fixture[split_d1..]
+            .windows(b"\x1b]133;A\x07~/WORK %\x1b]133;B\x07\r\n".len())
+            .position(|w| w == b"\x1b]133;A\x07~/WORK %\x1b]133;B\x07\r\n")
+            .unwrap()
+            + split_d1
+            + b"\x1b]133;A\x07~/WORK %\x1b]133;B\x07\r\n".len();
+        let split_d0 = fixture[split_empty_enter..]
+            .windows(b"\x1b]133;D;0\x07".len())
+            .position(|w| w == b"\x1b]133;D;0\x07")
+            .unwrap()
+            + split_empty_enter
+            + b"\x1b]133;D;0\x07".len();
+
+        // 1) cargo build -> exit 1 with multi-line output
+        pane.process_pty_bytes(pane_id, 0, &fixture[..split_d1], &tx);
+        assert!(pane.has_osc133_marks());
+        assert_eq!(
+            pane.last_command_output(),
+            Some(LastCommandOutput {
+                command: Some("cargo build".to_string()),
+                exit_code: Some(1),
+                output: "error[E0425]: cannot find value `x` in this scope\n --> src/main.rs:2:5"
+                    .to_string(),
+                truncated: false,
+            })
+        );
+
+        // 2) Empty Enter (A -> B -> newline -> no C) must preserve previous command output!
+        pane.process_pty_bytes(pane_id, 0, &fixture[split_d1..split_empty_enter], &tx);
+        assert_eq!(
+            pane.last_command_output(),
+            Some(LastCommandOutput {
+                command: Some("cargo build".to_string()),
+                exit_code: Some(1),
+                output: "error[E0425]: cannot find value `x` in this scope\n --> src/main.rs:2:5"
+                    .to_string(),
+                truncated: false,
+            })
+        );
+
+        // 3) `true` -> empty output, exit 0
+        pane.process_pty_bytes(pane_id, 0, &fixture[split_empty_enter..split_d0], &tx);
+        assert_eq!(
+            pane.last_command_output(),
+            Some(LastCommandOutput {
+                command: Some("true".to_string()),
+                exit_code: Some(0),
+                output: String::new(),
+                truncated: false,
+            })
+        );
+
+        // 4) `sleep 100` + Ctrl+C -> `^C`, exit 130, followed by ST-terminated A/B with aid=123
+        pane.process_pty_bytes(pane_id, 0, &fixture[split_d0..], &tx);
+        assert_eq!(
+            pane.last_command_output(),
+            Some(LastCommandOutput {
+                command: Some("sleep 100".to_string()),
+                exit_code: Some(130),
+                output: "^C".to_string(),
+                truncated: false,
+            })
+        );
+    }
+
+    #[test]
+    fn osc133_survives_resize_with_unwrap_and_handles_clear_and_eviction() {
+        let (tx, _rx) = mpsc::channel(4);
+        let terminal = crate::ghostty::Terminal::new(15, 6, 8192).unwrap();
+        let pane = GhosttyPaneTerminal::new(terminal, tx.clone()).unwrap();
+        let pane_id = PaneId::from_raw(1);
+
+        pane.process_pty_bytes(
+            pane_id,
+            0,
+            b"\x1b]133;A\x07$ \x1b]133;B\x07longcmd\r\n\x1b]133;C\x07ABCDEFGHIJKLMNOPQRSTUVWXYZ\r\nsecond line\r\n\x1b]133;D;0\x07\x1b]133;A\x07$ \x1b]133;B\x07",
+            &tx,
+        );
+
+        // Resize wider -> unwrapped logical lines still match.
+        pane.resize(6, 50, 8, 16);
+        assert_eq!(
+            pane.last_command_output(),
+            Some(LastCommandOutput {
+                command: Some("longcmd".to_string()),
+                exit_code: Some(0),
+                output: "ABCDEFGHIJKLMNOPQRSTUVWXYZ\nsecond line".to_string(),
+                truncated: false,
+            })
+        );
+
+        // Resize narrower -> wrapped lines still unwrap cleanly back to logical lines.
+        pane.resize(10, 10, 8, 16);
+        assert_eq!(
+            pane.last_command_output(),
+            Some(LastCommandOutput {
+                command: Some("longcmd".to_string()),
+                exit_code: Some(0),
+                output: "ABCDEFGHIJKLMNOPQRSTUVWXYZ\nsecond line".to_string(),
+                truncated: false,
+            })
+        );
+
+        // `clear` command produces empty output, not previous command output.
+        pane.process_pty_bytes(
+            pane_id,
+            0,
+            b"clear\r\n\x1b]133;C\x07\x1b[H\x1b[2J\x1b[3J\x1b]133;D;0\x07\x1b]133;A\x07$ \x1b]133;B\x07",
+            &tx,
+        );
+        assert_eq!(
+            pane.last_command_output(),
+            Some(LastCommandOutput {
+                command: Some("clear".to_string()),
+                exit_code: Some(0),
+                output: String::new(),
+                truncated: false,
+            })
+        );
+
+        // `clear_screen()` also wipes output cleanly while preserving marks flag.
+        pane.process_pty_bytes(
+            pane_id,
+            0,
+            b"echo hi\r\n\x1b]133;C\x07hi\r\n\x1b]133;D;0\x07\x1b]133;A\x07$ \x1b]133;B\x07",
+            &tx,
+        );
+        assert_eq!(
+            pane.last_command_output().as_ref().map(|o| o.output.as_str()),
+            Some("hi")
+        );
+        pane.clear_screen().unwrap();
+        assert!(pane.has_osc133_marks());
+        assert_eq!(
+            pane.last_command_output().as_ref().map(|o| o.output.as_str()),
+            Some("")
+        );
+
+        // Small scrollback: eviction marks output as truncated while keeping surviving tail.
+        let small_terminal = crate::ghostty::Terminal::new(80, 4, 256).unwrap();
+        let small_pane = GhosttyPaneTerminal::new(small_terminal, tx.clone()).unwrap();
+        let mut huge = Vec::from(b"\x1b]133;A\x07$ \x1b]133;B\x07seq\r\n\x1b]133;C\x07".as_slice());
+        for i in 0..2500 {
+            huge.extend_from_slice(format!("line-{i:04} {:040}\r\n", i).as_bytes());
+        }
+        huge.extend_from_slice(b"\x1b]133;D;0\x07\x1b]133;A\x07$ \x1b]133;B\x07");
+        small_pane.process_pty_bytes(pane_id, 0, &huge, &tx);
+
+        let evicted = small_pane.last_command_output().unwrap();
+        assert!(evicted.truncated, "expected scrollback eviction to mark truncated");
+        assert!(evicted.output.contains("line-2499"));
+        assert!(!evicted.output.contains("line-0000"));
     }
 }

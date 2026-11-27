@@ -1,0 +1,14 @@
+data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1764000000,"model":"qwen3.8-9b-distill-uncensored-heretic","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+
+: keep-alive
+
+data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1764000000,"model":"qwen3.8-9b-distill-uncensored-heretic","choices":[{"index":0,"delta":{"content":"```zsh\n"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1764000000,"model":"qwen3.8-9b-distill-uncensored-heretic","choices":[{"index":0,"delta":{"content":"find . -type f -size +100M"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1764000000,"model":"qwen3.8-9b-distill-uncensored-heretic","choices":[{"index":0,"delta":{"content":"\n```"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1764000000,"model":"qwen3.8-9b-distill-uncensored-heretic","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: [DONE]
+

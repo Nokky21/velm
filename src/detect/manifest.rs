@@ -287,6 +287,7 @@ pub(crate) fn reload_manifests() -> Vec<AgentManifestSummary> {
     summaries
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn reload_manifests_for_agents(agents: &[Agent]) {
     if agents.is_empty() {
         return;
@@ -875,6 +876,7 @@ pub fn explain_to_json_value(explain: &DetectionExplain) -> serde_json::Value {
 
 pub(crate) struct ParsedRemoteManifest {
     pub(crate) manifest: AgentManifest,
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) version: ManifestVersion,
 }
 

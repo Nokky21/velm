@@ -25,6 +25,7 @@ pub(crate) fn managed_installations_dir(plugin_id: &str) -> PathBuf {
         .join(crate::api::schema::plugin_managed_path_component(plugin_id))
 }
 
+#[allow(dead_code)]
 pub(crate) fn create_managed_installation(plugin_id: &str) -> std::io::Result<PathBuf> {
     let parent = managed_installations_dir(plugin_id);
     std::fs::create_dir_all(&parent)?;

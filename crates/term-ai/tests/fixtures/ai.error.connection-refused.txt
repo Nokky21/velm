@@ -1,0 +1,4 @@
+REAL (2026-11-24, esta máquina): sin servidor escuchando en 127.0.0.1:1234.
+Comando: curl -s -m 3 http://127.0.0.1:1234/v1/models
+Resultado: sin cuerpo, sin código HTTP, curl termina con código 7 (no pudo conectar).
+Lo que debe hacer term-ai: tratarlo como NO_SERVER (CONTRATO §C.4) y, en detección automática, pasar al siguiente puerto.

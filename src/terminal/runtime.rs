@@ -419,6 +419,14 @@ impl TerminalRuntime {
         self.0.extract_selection(selection)
     }
 
+    pub fn has_osc133_marks(&self) -> bool {
+        self.0.has_osc133_marks()
+    }
+
+    pub(crate) fn last_command_output(&self) -> Option<crate::pane::LastCommandOutput> {
+        self.0.last_command_output()
+    }
+
     pub fn render(&self, frame: &mut Frame, area: Rect, show_cursor: bool) {
         self.0.render(frame, area, show_cursor);
     }

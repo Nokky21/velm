@@ -1,0 +1,56 @@
+{
+  "type": "assistant",
+  "timestamp": "2026-11-10T09:56:17.125Z",
+  "sessionId": "00000000-0000-4000-8000-000000000001",
+  "cwd": "/Users/x/Desktop/WORK/ejemplo-api",
+  "gitBranch": "feat/ejemplo",
+  "isSidechain": false,
+  "version": "2.1.312",
+  "uuid": "e31c4ab3-2751-4afd-968b-3d55e3e1eee6",
+  "parentUuid": "96e69d8d-e985-456d-9bf9-bc4f4465f4be",
+  "requestId": "req_011Cgu3hG3GpRxWJ1GGixBBC",
+  "userType": "external",
+  "entrypoint": "claude-vscode",
+  "message": {
+    "id": "msg_011Cgu3hGBx31LEqKJUmfBE6",
+    "model": "claude-fable-5-2",
+    "type": "message",
+    "role": "assistant",
+    "content": [],
+    "stop_reason": "end_turn",
+    "usage": {
+      "input_tokens": 2,
+      "cache_creation_input_tokens": 31312,
+      "cache_read_input_tokens": 28384,
+      "output_tokens": 1379,
+      "output_tokens_details": {
+        "thinking_tokens": 630
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 31312,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "global",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 1379,
+          "cache_read_input_tokens": 28384,
+          "cache_creation_input_tokens": 31312,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 31312
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard",
+      "fallback_credit": null
+    }
+  }
+}

@@ -1,0 +1,12 @@
+[
+  { "sqlstate": "25006", "severity": "ERROR", "message": "cannot execute UPDATE in a read-only transaction" },
+  { "sqlstate": "25001", "severity": "ERROR", "message": "CREATE INDEX CONCURRENTLY cannot run inside a transaction block" },
+  { "sqlstate": "25P03", "severity": "FATAL", "message": "terminating connection due to idle-in-transaction timeout" },
+  { "sqlstate": "57014", "severity": "ERROR", "message": "canceling statement due to statement timeout" },
+  { "sqlstate": "40P01", "severity": "ERROR", "message": "deadlock detected" },
+  { "sqlstate": "55P03", "severity": "ERROR", "message": "could not obtain lock on row in relation \"prueba\"" },
+  { "sqlstate": "42601", "severity": "ERROR", "message": "syntax error at or near \"UPDTE\"" },
+  { "sqlstate": "28P01", "severity": "FATAL", "message": "password authentication failed for user \"x\"" },
+  { "sqlstate": "3D000", "severity": "FATAL", "message": "database \"nope\" does not exist" },
+  { "sqlstate": "08006", "severity": "FATAL", "message": "connection failure" }
+]

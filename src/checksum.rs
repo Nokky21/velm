@@ -6,6 +6,7 @@ use std::{
 
 use sha2::{Digest, Sha256};
 
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn verify_sha256(path: &Path, expected: &str) -> io::Result<()> {
     let expected = expected.trim().to_ascii_lowercase();
     if expected.len() != 64 || !expected.chars().all(|ch| ch.is_ascii_hexdigit()) {

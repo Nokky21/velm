@@ -1,0 +1,189 @@
+name: term-ci
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+env:
+  RUST_TOOLCHAIN_VERSION: 1.96.1
+  CARGO_PROFILE_DEV_DEBUG: "1"
+  CARGO_PROFILE_TEST_DEBUG: "1"
+  ZIG_GLOBAL_CACHE_DIR: ${{ github.workspace }}/.zig-cache
+  ZIG_LOCAL_CACHE_DIR: ${{ github.workspace }}/.zig-cache
+
+concurrency:
+  group: term-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  velm-checks:
+    name: velm checks (macOS arm64)
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # v1
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN_VERSION }}
+          components: rustfmt,clippy
+
+      - name: Install cargo-nextest and cargo-deny
+        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+        with:
+          tool: cargo-nextest,cargo-deny
+
+      - name: Install Zig 0.16.0
+        uses: vercel-labs/setup-zig@83c1594f26b86da8a9a8ddd9b5ee5f3af0f96943 # v1.0.2
+        with:
+          version: 0.16.0
+
+      - name: Restore Zig build cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .zig-cache
+          key: term-ci-zig-v1-${{ runner.os }}-${{ runner.arch }}-0.16.0-${{ github.sha }}
+          restore-keys: |
+            term-ci-zig-v1-${{ runner.os }}-${{ runner.arch }}-0.16.0-
+
+      - name: Restore cargo cache
+        uses: Swatinem/rust-cache@f0d9c3887740aee45f6153b24b3a6b815192ec16 # v2
+        with:
+          cache-bin: false
+          key: term-ci-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Build workspace
+        run: cargo build --workspace --locked
+
+      - name: Run tests with cargo-nextest
+        run: cargo nextest run --workspace --locked -E 'not binary(live_handoff)' --status-level fail --final-status-level fail --failure-output final --success-output never
+
+      - name: Run clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Check formatting on crates/term-* only
+        run: |
+          for manifest in crates/term-*/Cargo.toml; do
+            if [ -f "$manifest" ]; then
+              cargo fmt --manifest-path "$manifest" --check
+            fi
+          done
+
+      - name: Run cargo-deny check
+        run: cargo deny check
+
+      - name: Static network and subprocess privacy check
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          import re
+          import sys
+
+          ROOT = pathlib.Path(".")
+          ALLOWED_STD_NET_CRATES = {"term-ai", "term-sql"}
+          STD_NET_RE = re.compile(r"\bstd::net\b|\buse\s+std::net\b")
+          SUBPROCESS_RE = re.compile(
+              r"""(?:Command::new|noninteractive_process::command)\s*\(\s*"(?:curl|wget|nc)"\s*\)"""
+          )
+          TEST_ATTR_RE = re.compile(r"#\[\s*cfg\s*\(\s*test\s*\)\s*\]")
+
+          def strip_comments_and_test_blocks(source: str) -> str:
+              out = []
+              i = 0
+              n = len(source)
+              while i < n:
+                  if source.startswith("//", i):
+                      end = source.find("\n", i + 2)
+                      end = n if end == -1 else end
+                      out.append("\n" if end < n else "")
+                      i = end
+                      continue
+                  if source.startswith("/*", i):
+                      depth = 1
+                      j = i + 2
+                      while j < n and depth > 0:
+                          if source.startswith("/*", j):
+                              depth += 1
+                              j += 2
+                          elif source.startswith("*/", j):
+                              depth -= 1
+                              j += 2
+                          else:
+                              j += 1
+                      out.append(" " * source[i:j].count("\n"))
+                      i = j
+                      continue
+                  m = TEST_ATTR_RE.match(source, i)
+                  if m:
+                      brace = source.find("{", m.end())
+                      semi = source.find(";", m.end())
+                      if brace != -1 and (semi == -1 or brace < semi):
+                          depth = 0
+                          j = brace
+                          while j < n:
+                              if source[j] == "{":
+                                  depth += 1
+                              elif source[j] == "}":
+                                  depth -= 1
+                                  if depth == 0:
+                                      j += 1
+                                      break
+                              j += 1
+                          out.append("\n" * source[i:j].count("\n"))
+                          i = j
+                          continue
+                  out.append(source[i])
+                  i += 1
+              return "".join(out)
+
+          errors = []
+
+          # 1. Check crates/term-* (excluding tests/ and #[cfg(test)])
+          for crate_dir in sorted(ROOT.glob("crates/term-*")):
+              if not crate_dir.is_dir():
+                  continue
+              crate_name = crate_dir.name
+              for rs in sorted(crate_dir.rglob("*.rs")):
+                  rel = rs.relative_to(ROOT)
+                  if "tests" in rel.parts:
+                      continue
+                  code = strip_comments_and_test_blocks(rs.read_text(encoding="utf-8"))
+                  if crate_name not in ALLOWED_STD_NET_CRATES:
+                      for m in STD_NET_RE.finditer(code):
+                          line = code.count("\n", 0, m.start()) + 1
+                          errors.append(f"{rel}:{line}: forbidden std::net outside term-ai/term-sql")
+                  for m in SUBPROCESS_RE.finditer(code):
+                      line = code.count("\n", 0, m.start()) + 1
+                      errors.append(f"{rel}:{line}: forbidden curl/wget/nc subprocess")
+
+          # 2. Check fork src/ (excluding #[cfg(test)]) for curl/wget/nc subprocesses
+          for rs in sorted((ROOT / "src").rglob("*.rs")):
+              rel = rs.relative_to(ROOT)
+              code = strip_comments_and_test_blocks(rs.read_text(encoding="utf-8"))
+              for m in SUBPROCESS_RE.finditer(code):
+                  line = code.count("\n", 0, m.start()) + 1
+                  errors.append(f"{rel}:{line}: forbidden curl/wget/nc subprocess")
+
+          if errors:
+              print("Static privacy check failed:", file=sys.stderr)
+              for err in errors:
+                  print(f"  {err}", file=sys.stderr)
+              sys.exit(1)
+          print("Static privacy check passed.")
+          PY
+
+      - name: Save Zig build cache
+        if: github.event_name == 'push'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .zig-cache
+          key: term-ci-zig-v1-${{ runner.os }}-${{ runner.arch }}-0.16.0-${{ github.sha }}

@@ -341,6 +341,7 @@ pub(crate) fn session_restored(workspaces: usize, outcome: &'static str) {
     );
 }
 
+#[allow(dead_code)]
 pub(crate) fn update_check_started() {
     tracing::info!(
         event = "update.check.start",
@@ -350,6 +351,7 @@ pub(crate) fn update_check_started() {
     );
 }
 
+#[allow(dead_code)]
 pub(crate) fn update_check_failed(err: &str) {
     tracing::warn!(
         event = "update.check.complete",
@@ -360,6 +362,7 @@ pub(crate) fn update_check_failed(err: &str) {
     );
 }
 
+#[allow(dead_code)]
 pub(crate) fn update_available(version: &str) {
     tracing::info!(
         event = "update.available",

@@ -561,6 +561,247 @@ impl AgentOscStateTracker {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Osc133Event {
+    PromptStart,
+    CommandInputStart,
+    CommandOutputStart,
+    CommandFinished { exit_code: Option<i32> },
+    ClearDisplay { erase_scrollback: bool },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct Osc133TrackedEvent {
+    pub(super) end_offset: usize,
+    pub(super) event: Osc133Event,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+enum Osc133StreamState {
+    #[default]
+    Ground,
+    Escape,
+    OscBody,
+    OscEscape,
+    CsiBody,
+    IgnoreString,
+    IgnoreStringEscape,
+    OversizedOsc,
+    OversizedOscEscape,
+}
+
+/// Streaming parser for OSC 133 (`A`/`B`/`C`/`D`) marks and display-clear
+/// sequences (`CSI 2 J`, `CSI 3 J`, `ESC c`), returning stream-ordered offsets.
+#[derive(Debug, Default)]
+pub(super) struct Osc133EventTracker {
+    state: Osc133StreamState,
+    body: Vec<u8>,
+    pending: Vec<Osc133TrackedEvent>,
+}
+
+impl Osc133EventTracker {
+    const MAX_OSC_BODY_BYTES: usize = 4096;
+    const MAX_CSI_BODY_BYTES: usize = 64;
+
+    pub(super) fn observe(&mut self, bytes: &[u8]) {
+        let mut cursor = 0;
+        while cursor < bytes.len() {
+            if matches!(
+                self.state,
+                Osc133StreamState::Ground | Osc133StreamState::IgnoreString
+            ) {
+                let Some(offset) = bytes[cursor..].iter().position(|&byte| byte == 0x1b) else {
+                    break;
+                };
+                cursor += offset;
+            }
+            let index = cursor;
+            let byte = bytes[cursor];
+            cursor += 1;
+            match self.state {
+                Osc133StreamState::Ground => {
+                    if byte == 0x1b {
+                        self.state = Osc133StreamState::Escape;
+                    }
+                }
+                Osc133StreamState::Escape => match byte {
+                    b']' => {
+                        self.body.clear();
+                        self.state = Osc133StreamState::OscBody;
+                    }
+                    b'[' => {
+                        self.body.clear();
+                        self.state = Osc133StreamState::CsiBody;
+                    }
+                    b'c' => {
+                        self.pending.push(Osc133TrackedEvent {
+                            end_offset: index + 1,
+                            event: Osc133Event::ClearDisplay {
+                                erase_scrollback: true,
+                            },
+                        });
+                        self.state = Osc133StreamState::Ground;
+                    }
+                    0x1b => self.state = Osc133StreamState::Escape,
+                    b if is_ignored_string_intro(b) => {
+                        self.body.clear();
+                        self.state = Osc133StreamState::IgnoreString;
+                    }
+                    _ => self.state = Osc133StreamState::Ground,
+                },
+                Osc133StreamState::OscBody => match byte {
+                    0x07 => {
+                        self.finalize_osc(index + 1);
+                        self.state = Osc133StreamState::Ground;
+                    }
+                    0x1b => self.state = Osc133StreamState::OscEscape,
+                    _ => {
+                        self.body.push(byte);
+                        if self.body.len() > Self::MAX_OSC_BODY_BYTES {
+                            self.body.clear();
+                            self.state = Osc133StreamState::OversizedOsc;
+                        }
+                    }
+                },
+                Osc133StreamState::OscEscape => match byte {
+                    b'\\' => {
+                        self.finalize_osc(index + 1);
+                        self.state = Osc133StreamState::Ground;
+                    }
+                    0x07 => {
+                        self.body.push(0x1b);
+                        self.finalize_osc(index + 1);
+                        self.state = Osc133StreamState::Ground;
+                    }
+                    0x1b => {
+                        self.body.push(0x1b);
+                        if self.body.len() > Self::MAX_OSC_BODY_BYTES {
+                            self.body.clear();
+                            self.state = Osc133StreamState::OversizedOscEscape;
+                        }
+                    }
+                    _ => {
+                        self.body.push(0x1b);
+                        self.body.push(byte);
+                        if self.body.len() > Self::MAX_OSC_BODY_BYTES {
+                            self.body.clear();
+                            self.state = Osc133StreamState::OversizedOsc;
+                        } else {
+                            self.state = Osc133StreamState::OscBody;
+                        }
+                    }
+                },
+                Osc133StreamState::CsiBody => {
+                    if (0x40..=0x7e).contains(&byte) {
+                        if byte == b'J' {
+                            if let Some(event) = parse_csi_erase_display(&self.body) {
+                                self.pending.push(Osc133TrackedEvent {
+                                    end_offset: index + 1,
+                                    event,
+                                });
+                            }
+                        }
+                        self.body.clear();
+                        self.state = Osc133StreamState::Ground;
+                    } else if byte == 0x1b {
+                        self.body.clear();
+                        self.state = Osc133StreamState::Escape;
+                    } else if byte == 0x18 || byte == 0x1a {
+                        self.body.clear();
+                        self.state = Osc133StreamState::Ground;
+                    } else if (0x20..=0x3f).contains(&byte)
+                        && self.body.len() < Self::MAX_CSI_BODY_BYTES
+                    {
+                        self.body.push(byte);
+                    }
+                }
+                Osc133StreamState::IgnoreString => {
+                    if byte == 0x1b {
+                        self.state = Osc133StreamState::IgnoreStringEscape;
+                    }
+                }
+                Osc133StreamState::IgnoreStringEscape => {
+                    if byte == b'\\' {
+                        self.state = Osc133StreamState::Ground;
+                    } else if byte != 0x1b {
+                        self.state = Osc133StreamState::IgnoreString;
+                    }
+                }
+                Osc133StreamState::OversizedOsc => {
+                    if byte == 0x1b {
+                        self.state = Osc133StreamState::OversizedOscEscape;
+                    } else if byte == 0x07 {
+                        self.state = Osc133StreamState::Ground;
+                    }
+                }
+                Osc133StreamState::OversizedOscEscape => {
+                    if byte == b'\\' {
+                        self.state = Osc133StreamState::Ground;
+                    } else if byte != 0x1b {
+                        self.state = Osc133StreamState::OversizedOsc;
+                    }
+                }
+            }
+        }
+    }
+
+    fn finalize_osc(&mut self, end_offset: usize) {
+        if let Some(event) = parse_osc133_body(&self.body) {
+            self.pending.push(Osc133TrackedEvent { end_offset, event });
+        }
+        self.body.clear();
+    }
+
+    pub(super) fn drain_pending(&mut self) -> Vec<Osc133TrackedEvent> {
+        std::mem::take(&mut self.pending)
+    }
+}
+
+fn parse_osc133_body(body: &[u8]) -> Option<Osc133Event> {
+    let rest = body.strip_prefix(b"133;")?;
+    let mut parts = rest.split(|&b| b == b';');
+    let kind = parts.next()?;
+    match kind {
+        b"A" => Some(Osc133Event::PromptStart),
+        b"B" => Some(Osc133Event::CommandInputStart),
+        b"C" => Some(Osc133Event::CommandOutputStart),
+        b"D" => {
+            let exit_code = parts
+                .next()
+                .and_then(|param| std::str::from_utf8(param).ok())
+                .and_then(|param| param.trim().parse::<i32>().ok());
+            Some(Osc133Event::CommandFinished { exit_code })
+        }
+        _ => None,
+    }
+}
+
+fn parse_csi_erase_display(params: &[u8]) -> Option<Osc133Event> {
+    if params.iter().any(|&b| !(b.is_ascii_digit() || b == b';')) {
+        return None;
+    }
+    let mut has_2 = false;
+    let mut has_3 = false;
+    for part in params.split(|&b| b == b';') {
+        match part {
+            b"2" => has_2 = true,
+            b"3" => has_3 = true,
+            _ => {}
+        }
+    }
+    if has_3 {
+        Some(Osc133Event::ClearDisplay {
+            erase_scrollback: true,
+        })
+    } else if has_2 {
+        Some(Osc133Event::ClearDisplay {
+            erase_scrollback: false,
+        })
+    } else {
+        None
+    }
+}
+
 /// Splits an OSC body at the first `;`, returning `(command, payload)`.
 /// Returns `None` if there is no `;`.
 fn parse_agent_osc_body(body: &[u8]) -> Option<(&[u8], &[u8])> {
@@ -1473,5 +1714,81 @@ mod tests {
 
         assert_eq!(pane_default_theme(&pane).background, host_theme.background);
         assert_eq!(pane_default_theme(&pane).foreground, host_theme.foreground);
+    }
+
+    fn decode_osc133_fixture() -> Vec<u8> {
+        let raw = include_str!("../../tests/fixtures/osc133.sample.sintetico.txt");
+        let mut out = String::new();
+        for line in raw.lines() {
+            if line.starts_with('#') || line.trim().is_empty() {
+                continue;
+            }
+            let decoded = line
+                .replace("\\e\\\\", "\x1b\\")
+                .replace("\\e", "\x1b")
+                .replace("\\a", "\x07")
+                .replace("\\n", "\r\n");
+            out.push_str(&decoded);
+        }
+        out.into_bytes()
+    }
+
+    #[test]
+    fn osc133_tracker_parses_fixture_with_bel_st_and_extra_params() {
+        let input = decode_osc133_fixture();
+        for chunk_size in [1, 3, 17, input.len()] {
+            let mut tracker = Osc133EventTracker::default();
+            let mut events = Vec::new();
+            for chunk in input.chunks(chunk_size) {
+                tracker.observe(chunk);
+                events.extend(tracker.drain_pending().into_iter().map(|ev| ev.event));
+            }
+            assert_eq!(
+                events,
+                vec![
+                    Osc133Event::PromptStart,
+                    Osc133Event::CommandInputStart,
+                    Osc133Event::CommandOutputStart,
+                    Osc133Event::CommandFinished { exit_code: Some(1) },
+                    Osc133Event::PromptStart,
+                    Osc133Event::CommandInputStart,
+                    Osc133Event::PromptStart,
+                    Osc133Event::CommandInputStart,
+                    Osc133Event::CommandOutputStart,
+                    Osc133Event::CommandFinished { exit_code: Some(0) },
+                    Osc133Event::PromptStart,
+                    Osc133Event::CommandInputStart,
+                    Osc133Event::CommandOutputStart,
+                    Osc133Event::CommandFinished {
+                        exit_code: Some(130)
+                    },
+                    Osc133Event::PromptStart,
+                    Osc133Event::CommandInputStart,
+                ]
+            );
+        }
+    }
+
+    #[test]
+    fn osc133_tracker_detects_clear_sequences_and_ignores_dcs() {
+        let mut tracker = Osc133EventTracker::default();
+        tracker.observe(b"\x1bPtmux;\x1b\x1b]133;A\x07\x1b\\\x1b[2J\x1b[3J\x1b]133;D\x07");
+        let events: Vec<_> = tracker
+            .drain_pending()
+            .into_iter()
+            .map(|ev| ev.event)
+            .collect();
+        assert_eq!(
+            events,
+            vec![
+                Osc133Event::ClearDisplay {
+                    erase_scrollback: false
+                },
+                Osc133Event::ClearDisplay {
+                    erase_scrollback: true
+                },
+                Osc133Event::CommandFinished { exit_code: None },
+            ]
+        );
     }
 }

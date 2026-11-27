@@ -214,6 +214,11 @@ impl App {
         binding: &crate::config::CustomCommandKeybind,
         selected_text: Option<String>,
     ) -> io::Result<()> {
+        match binding.command.trim() {
+            "term.copy_last_output" => return self.copy_last_command_output(),
+            "term.explain_last" => return self.explain_last_command_output(),
+            _ => {}
+        }
         match binding.action {
             crate::config::CustomCommandAction::Shell => self.spawn_custom_command(binding),
             crate::config::CustomCommandAction::Pane => {
@@ -358,6 +363,113 @@ impl App {
             });
         }
         Ok(())
+    }
+
+    pub(crate) fn copy_last_command_output(&mut self) -> io::Result<()> {
+        let Some(runtime) = self.focused_pane_terminal_runtime() else {
+            return Err(io::Error::other("no focused pane terminal runtime"));
+        };
+        if !runtime.has_osc133_marks() {
+            self.set_term_toast(
+                crate::app::state::ToastKind::NeedsAttention,
+                "esta sesión no tiene marcas de shell",
+                "",
+            );
+            return Ok(());
+        }
+        let Some(last) = runtime.last_command_output() else {
+            self.set_term_toast(
+                crate::app::state::ToastKind::NeedsAttention,
+                "no hay salida de comando anterior",
+                "",
+            );
+            return Ok(());
+        };
+        let _ = self.event_tx.try_send(crate::events::AppEvent::ClipboardWrite {
+            content: last.output.as_bytes().to_vec(),
+        });
+        let (title, context) = if last.truncated {
+            ("salida copiada", "recortada por límite de historial")
+        } else if last.output.is_empty() {
+            ("salida vacía", "último comando sin salida")
+        } else {
+            ("salida copiada", "")
+        };
+        self.set_term_toast(crate::app::state::ToastKind::Finished, title, context);
+        Ok(())
+    }
+
+    pub(crate) fn explain_last_command_output(&mut self) -> io::Result<()> {
+        const DEFAULT_EXPLAIN_HEAD_LINES: usize = 50;
+        const DEFAULT_EXPLAIN_TAIL_LINES: usize = 150;
+        const DEFAULT_EXPLAIN_MAX_CHARS: usize = 12_000;
+
+        let Some(runtime) = self.focused_pane_terminal_runtime() else {
+            return Err(io::Error::other("no focused pane terminal runtime"));
+        };
+        if !runtime.has_osc133_marks() {
+            self.set_term_toast(
+                crate::app::state::ToastKind::NeedsAttention,
+                "esta sesión no tiene marcas de shell",
+                "",
+            );
+            return Ok(());
+        }
+        let Some(last) = runtime.last_command_output() else {
+            self.set_term_toast(
+                crate::app::state::ToastKind::NeedsAttention,
+                "no hay salida de comando anterior",
+                "",
+            );
+            return Ok(());
+        };
+        let content = format_explain_input(
+            &last,
+            DEFAULT_EXPLAIN_HEAD_LINES,
+            DEFAULT_EXPLAIN_TAIL_LINES,
+            DEFAULT_EXPLAIN_MAX_CHARS,
+        );
+        let path = write_explain_temp_file(&content)?;
+        let argv = vec![
+            "term-ai".to_string(),
+            "explain".to_string(),
+            "--input-file".to_string(),
+            path.display().to_string(),
+            "--delete-input".to_string(),
+        ];
+        let (env, _) = self.custom_command_env();
+        let new_pane = match self.spawn_overlay_argv_command(&argv, None, env, vec![path.clone()]) {
+            Ok((_, new_pane)) => new_pane,
+            Err(err) => {
+                let _ = fs::remove_file(&path);
+                return Err(err);
+            }
+        };
+        let terminal_id = new_pane.terminal.id.clone();
+        self.terminal_runtimes
+            .insert(terminal_id.clone(), new_pane.runtime);
+        self.state
+            .remove_alias_shadowed_by_new_pane(new_pane.pane_id);
+        self.state.terminals.insert(terminal_id, new_pane.terminal);
+        Ok(())
+    }
+
+    fn focused_pane_terminal_runtime(&self) -> Option<&crate::terminal::TerminalRuntime> {
+        let ws_idx = self.state.active?;
+        let ws = self.state.workspaces.get(ws_idx)?;
+        let pane_id = ws.focused_pane_id()?;
+        self.state
+            .runtime_for_pane_in_workspace(&self.terminal_runtimes, ws_idx, pane_id)
+    }
+
+    fn set_term_toast(&mut self, kind: crate::app::state::ToastKind, title: &str, context: &str) {
+        self.state.toast = Some(crate::app::state::ToastNotification {
+            kind,
+            title: title.to_string(),
+            context: context.to_string(),
+            position: None,
+            target: None,
+        });
     }
 
     fn spawn_pane_command(
@@ -566,6 +678,137 @@ fn unique_scrollback_path(attempt: u32) -> std::path::PathBuf {
         "herdr-scrollback-{}-{nanos}-{attempt}.txt",
         std::process::id()
     ))
+}
+
+pub(crate) fn truncate_explain_output(
+    output: &str,
+    head_lines: usize,
+    tail_lines: usize,
+    max_chars: usize,
+) -> (String, usize) {
+    let lines: Vec<&str> = output.lines().collect();
+    if lines.is_empty() {
+        return (String::new(), 0);
+    }
+
+    let render = |head_count: usize, tail_count: usize| -> (String, usize) {
+        let omitted = lines.len().saturating_sub(head_count + tail_count);
+        let mut out = Vec::with_capacity(head_count + tail_count + 1);
+        out.extend(lines[..head_count].iter().copied().map(str::to_string));
+        if omitted > 0 {
+            out.push(format!("[… {omitted} líneas omitidas …]"));
+        }
+        if tail_count > 0 {
+            out.extend(
+                lines[lines.len() - tail_count..]
+                    .iter()
+                    .copied()
+                    .map(str::to_string),
+            );
+        }
+        (out.join("\n"), omitted)
+    };
+
+    let (mut h, mut t) = if lines.len() > head_lines.saturating_add(tail_lines) {
+        (head_lines.min(lines.len()), tail_lines.min(lines.len()))
+    } else {
+        (lines.len(), 0)
+    };
+
+    let (mut text, mut omitted) = render(h, t);
+    if text.chars().count() <= max_chars {
+        return (text, omitted);
+    }
+
+    if t == 0 {
+        let h_cap = head_lines.min(lines.len());
+        let t_cap = tail_lines.min(lines.len().saturating_sub(h_cap));
+        h = h_cap;
+        t = t_cap;
+        let (candidate, candidate_omitted) = render(h, t);
+        text = candidate;
+        omitted = candidate_omitted;
+    }
+
+    while text.chars().count() > max_chars && (h > 0 || t > 1) {
+        if h > 0 && (t <= 1 || h >= t) {
+            h -= 1;
+        } else if t > 1 {
+            t -= 1;
+        } else {
+            break;
+        }
+        let (candidate, candidate_omitted) = render(h, t);
+        text = candidate;
+        omitted = candidate_omitted;
+    }
+
+    if text.chars().count() > max_chars {
+        text = text.chars().take(max_chars).collect();
+    }
+    (text, omitted)
+}
+
+pub(crate) fn format_explain_input(
+    last: &crate::pane::LastCommandOutput,
+    head_lines: usize,
+    tail_lines: usize,
+    max_chars: usize,
+) -> String {
+    let command = last.command.as_deref().unwrap_or("");
+    let exit = last
+        .exit_code
+        .map_or_else(|| "desconocido".to_string(), |code| code.to_string());
+    let (trimmed_output, omitted) =
+        truncate_explain_output(&last.output, head_lines, tail_lines, max_chars);
+    format!("command: {command}\nexit: {exit}\ntruncated: {omitted}\n---\n{trimmed_output}\n")
+}
+
+pub(crate) fn write_explain_temp_file(content: &str) -> io::Result<std::path::PathBuf> {
+    use std::collections::hash_map::RandomState;
+    use std::hash::{BuildHasher, Hasher};
+
+    static EXPLAIN_SEQ: AtomicU64 = AtomicU64::new(0);
+
+    let mut last_collision = None;
+    for _ in 0..16 {
+        let mut hasher = RandomState::new().build_hasher();
+        hasher.write_u32(std::process::id());
+        hasher.write_u64(EXPLAIN_SEQ.fetch_add(1, Ordering::Relaxed));
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        hasher.write_u128(nanos);
+        let hex = format!("{:016x}", hasher.finish());
+        let path = std::env::temp_dir().join(format!("term-explain-{hex}.txt"));
+
+        let mut options = fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+
+        match options.open(&path) {
+            Ok(mut file) => {
+                file.write_all(content.as_bytes())?;
+                return Ok(path);
+            }
+            Err(err) if err.kind() == io::ErrorKind::AlreadyExists => {
+                last_collision = Some(err);
+            }
+            Err(err) => return Err(err),
+        }
+    }
+
+    Err(last_collision.unwrap_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            "failed to create unique explain temp file",
+        )
+    }))
 }
 
 #[cfg(test)]
@@ -778,5 +1021,100 @@ mod tests {
             crate::protocol::ClientShellCommandAction::Popup
         );
         assert!(!format!("{manifest:?}").contains("secret-command"));
+    }
+
+    fn setup_app_with_pane(bytes: &[u8]) -> crate::app::App {
+        let mut app = test_app();
+        let workspace = crate::workspace::Workspace::test_new("osc133");
+        let pane_id = workspace.tabs[0].root_pane;
+        let terminal_id = workspace.terminal_id(pane_id).cloned().unwrap();
+        app.state.workspaces = vec![workspace];
+        app.state.ensure_test_terminals();
+        app.state.active = Some(0);
+        app.state.selected = 0;
+        let runtime = crate::terminal::TerminalRuntime::test_with_screen_bytes(80, 24, &[]);
+        runtime.test_process_pty_bytes(bytes);
+        app.terminal_runtimes.insert(terminal_id, runtime);
+        app
+    }
+
+    #[tokio::test]
+    async fn copy_last_output_without_marks_shows_spanish_notice() {
+        let mut app = setup_app_with_pane(b"$ echo hi\r\nhi\r\n");
+        let mut cmd = binding(crate::config::CustomCommandAction::Shell);
+        cmd.command = "term.copy_last_output".to_string();
+
+        app.execute_custom_command_binding(&cmd, None).unwrap();
+
+        assert_eq!(
+            app.state.toast.as_ref().map(|t| t.title.as_str()),
+            Some("esta sesión no tiene marcas de shell")
+        );
+        assert!(matches!(
+            app.event_rx.try_recv(),
+            Err(tokio::sync::mpsc::error::TryRecvError::Empty)
+        ));
+    }
+
+    #[tokio::test]
+    async fn copy_last_output_with_marks_emits_clipboard_write_event() {
+        let mut app = setup_app_with_pane(
+            b"\x1b]133;A\x07$ \x1b]133;B\x07echo ok\r\n\x1b]133;C\x07ok line1\r\nok line2\r\n\x1b]133;D;0\x07\x1b]133;A\x07$ \x1b]133;B\x07",
+        );
+        let mut cmd = binding(crate::config::CustomCommandAction::Shell);
+        cmd.command = "term.copy_last_output".to_string();
+
+        app.execute_custom_command_binding(&cmd, None).unwrap();
+
+        assert_eq!(
+            app.state.toast.as_ref().map(|t| t.title.as_str()),
+            Some("salida copiada")
+        );
+        let event = app.event_rx.try_recv().unwrap();
+        assert!(matches!(
+            event,
+            crate::events::AppEvent::ClipboardWrite { ref content }
+                if content == b"ok line1\nok line2"
+        ));
+    }
+
+    #[tokio::test]
+    async fn explain_last_without_marks_shows_spanish_notice() {
+        let mut app = setup_app_with_pane(b"plain output\r\n");
+        let mut cmd = binding(crate::config::CustomCommandAction::Shell);
+        cmd.command = "term.explain_last".to_string();
+
+        app.execute_custom_command_binding(&cmd, None).unwrap();
+
+        assert_eq!(
+            app.state.toast.as_ref().map(|t| t.title.as_str()),
+            Some("esta sesión no tiene marcas de shell")
+        );
+    }
+
+    #[test]
+    fn explain_helper_truncates_formats_and_creates_exclusive_temp_file() {
+        let lines: Vec<String> = (1..=300).map(|i| format!("line {i}")).collect();
+        let last = crate::pane::LastCommandOutput {
+            command: Some("cargo test".to_string()),
+            exit_code: Some(101),
+            output: lines.join("\n"),
+            truncated: false,
+        };
+        let formatted = super::format_explain_input(&last, 50, 150, 12_000);
+        assert!(formatted.starts_with("command: cargo test\nexit: 101\ntruncated: 100\n---\n"));
+        assert!(formatted.contains("[… 100 líneas omitidas …]"));
+        assert!(formatted.contains("line 1\n"));
+        assert!(formatted.contains("line 50\n"));
+        assert!(formatted.contains("line 151\n"));
+        assert!(formatted.contains("line 300\n"));
+
+        let path = super::write_explain_temp_file(&formatted).unwrap();
+        let name = path.file_name().unwrap().to_str().unwrap();
+        assert!(name.starts_with("term-explain-"));
+        assert!(name.ends_with(".txt"));
+        assert_eq!(name.len(), "term-explain-".len() + 16 + ".txt".len());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), formatted);
+        let _ = std::fs::remove_file(&path);
     }
 }

@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+## [0.1.0-velm] - 2026-11-27
+
+Initial `velm` fork based on [`herdrdev/herdr`](https://github.com/herdrdev/herdr) `v0.9.5` (Apache-2.0).
+
+### Added
+- Rebranded fork crate/binary as `velm` with isolated `~/.config/velm/` config and `velm.sock` / `velm-client.sock` socket paths; `[term]` config section is silently ignored by `velm`.
+- `deny.toml` (`cargo-deny` bans on HTTP/TLS crates outside `term-ai` and `term-sql`), `.github/workflows/term-ci.yml`, `.github/workflows/term-release.yml` (macOS arm64 tarball + SHA-256 release), `scripts/mem.sh`, `scripts/net.sh`, and `extras/alacritty.toml` (`option_as_alt = "OnlyLeft"`).
+- `shell/term.zsh` and `OSC 133` semantic prompt/output tracking in `crates/ghostty-vt` + `velm`, plus `term.copy_last_output` and `term.explain_last` custom command actions.
+- `crates/term-config`: `[term]` TOML loader/validator (`enabled = false` by default, `env = "prod"` rejected, local-only AI URL validation).
+- `crates/term-ai`: local OpenAI-compatible assistant (`suggest`, `explain`, `doctor`, `bench`) using `ureq` without TLS over loopback HTTP only, plus `zsh` `zle` widget (`^G`).
+- `crates/term-repos`: read-only Git repository status TUI and `--json` CLI (`GIT_OPTIONAL_LOCKS=0`, `GIT_TERMINAL_PROMPT=0`).
+- `crates/term-sql`: safe Postgres TUI and `conn` Keychain CLI for `local`/`dev` environments (read-only by default, AST classification with `sqlparser`, explicit `COMMIT`/`ROLLBACK` with countdown).
+- `crates/term-claude`: read-only Claude Code transcript TUI and `--json` CLI with `message.id` deduplication and `cost-state` / configured price tracking.
+- Documentation (`README.md`, `docs/{asistente,repos,sql,claude}.md`, `NOTICE`) and `.github/ISSUE_TEMPLATE/{bug_report,feature_request}.md`.
+
+### Removed
+- Removed upstream `herdr update`, background update/manifest checks, GitHub plugin downloads, and `curl` subprocess invocations (`ssh` remote attach retained).
+
+---
+
+*Upstream `herdrdev/herdr` history preserved below (`v0.9.5` and earlier):*
+
 ## [0.9.5] - 2026-10-14
 
 This is a hotfix release for v0.9.4. See the v0.9.4 notes for the full feature release: https://github.com/herdrdev/herdr/releases/tag/v0.9.4

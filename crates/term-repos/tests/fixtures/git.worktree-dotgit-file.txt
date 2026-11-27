@@ -1,0 +1,1 @@
+gitdir: /Users/x/Desktop/WORK/ejemplo/.git/worktrees/wt

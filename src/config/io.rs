@@ -12,6 +12,7 @@ const KNOWN_TOP_LEVEL_CONFIG_KEYS: &[&str] = &[
     "remote",
     "server",
     "session",
+    "term",
     "terminal",
     "theme",
     "ui",
@@ -21,9 +22,9 @@ const KNOWN_TOP_LEVEL_CONFIG_KEYS: &[&str] = &[
 
 pub fn app_dir_name() -> &'static str {
     if cfg!(debug_assertions) {
-        "herdr-dev"
+        "velm-dev"
     } else {
-        "herdr"
+        "velm"
     }
 }
 
@@ -157,7 +158,11 @@ impl Config {
                     ignored_keys
                         .into_iter()
                         .filter(|path| {
-                            !matches!(path.as_slice(), [ConfigKeyPathSegment::Key(key)] if unknown_sections.contains(key))
+                            !matches!(
+                                path.as_slice(),
+                                [ConfigKeyPathSegment::Key(key), ..]
+                                    if unknown_sections.contains(key) || key == "term"
+                            )
                         })
                         .collect(),
                     None,
@@ -239,7 +244,7 @@ pub fn config_diagnostic_summary(diagnostics: &[String]) -> Option<String> {
         ""
     };
 
-    Some(format!("{target}{impact}; herdr config check"))
+    Some(format!("{target}{impact}; velm config check"))
 }
 
 pub fn load_live_config() -> Result<LoadedConfig, Vec<String>> {
@@ -788,7 +793,7 @@ mod tests {
 
         assert_eq!(
             config_diagnostic_summary(&diagnostics).as_deref(),
-            Some("config.toml; herdr config check")
+            Some("config.toml; velm config check")
         );
     }
 
@@ -801,7 +806,7 @@ mod tests {
 
         assert_eq!(
             config_diagnostic_summary(&diagnostics).as_deref(),
-            Some("config.toml has unknown keys; herdr config check")
+            Some("config.toml has unknown keys; velm config check")
         );
     }
 
@@ -814,7 +819,7 @@ mod tests {
 
         assert_eq!(
             config_diagnostic_summary(&diagnostics).as_deref(),
-            Some("config.toml; herdr config check")
+            Some("config.toml; velm config check")
         );
     }
 
@@ -827,7 +832,7 @@ mod tests {
 
         assert_eq!(
             config_diagnostic_summary(&diagnostics).as_deref(),
-            Some("config.toml invalid; using defaults; herdr config check")
+            Some("config.toml invalid; using defaults; velm config check")
         );
     }
 
@@ -836,14 +841,14 @@ mod tests {
         let startup = vec!["config read error: permission denied; using defaults".to_string()];
         assert_eq!(
             config_diagnostic_summary(&startup).as_deref(),
-            Some("config.toml unreadable; using defaults; herdr config check")
+            Some("config.toml unreadable; using defaults; velm config check")
         );
 
         let reload =
             vec!["config read error: permission denied; keeping current config".to_string()];
         assert_eq!(
             config_diagnostic_summary(&reload).as_deref(),
-            Some("config.toml unreadable; keeping current config; herdr config check")
+            Some("config.toml unreadable; keeping current config; velm config check")
         );
     }
 
@@ -856,7 +861,7 @@ mod tests {
 
         assert_eq!(
             config_diagnostic_summary(&diagnostics).as_deref(),
-            Some("config.toml invalid; keeping current config; herdr config check")
+            Some("config.toml invalid; keeping current config; velm config check")
         );
     }
 
@@ -1197,5 +1202,61 @@ mouse_capture = false
 
         assert!(loaded.diagnostics.is_empty(), "{:?}", loaded.diagnostics);
         assert_eq!(loaded.config.terminal.default_shell, "pwsh.exe");
+    }
+
+    #[test]
+    fn term_section_is_silently_ignored_with_zero_diagnostics() {
+        let with_term = r#"
+[ui]
+mouse_capture = false
+
+[term.ai]
+enabled = true
+model = "qwen3.8-9b"
+future_key = 42
+
+[term.repos]
+enabled = true
+roots = ["~/Desktop/WORK"]
+
+[term.sql]
+enabled = true
+
+[[term.sql.connections]]
+name = "local-card"
+env = "local"
+
+[term.claude]
+enabled = true
+"#;
+        let without_term = r#"
+[ui]
+mouse_capture = false
+"#;
+
+        let live_with = load_live_config_from_str(with_term).unwrap();
+        let live_without = load_live_config_from_str(without_term).unwrap();
+        assert!(live_with.diagnostics.is_empty(), "{:?}", live_with.diagnostics);
+        assert!(live_with.invalid_sections.is_empty());
+        assert_eq!(
+            live_with.config.ui.mouse_capture,
+            live_without.config.ui.mouse_capture
+        );
+
+        let _guard = crate::config::test_config_env_lock().lock().unwrap();
+        let path = std::env::temp_dir().join(format!(
+            "velm-config-ignore-term-{}.toml",
+            std::process::id()
+        ));
+        std::fs::write(&path, with_term).unwrap();
+        std::env::set_var(CONFIG_PATH_ENV_VAR, &path);
+
+        let startup = Config::load();
+
+        std::env::remove_var(CONFIG_PATH_ENV_VAR);
+        let _ = std::fs::remove_file(path);
+
+        assert!(startup.diagnostics.is_empty(), "{:?}", startup.diagnostics);
+        assert!(!startup.config.ui.mouse_capture);
     }
 }

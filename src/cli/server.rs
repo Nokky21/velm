@@ -31,7 +31,7 @@ pub(super) fn run_server_command(args: &[String]) -> std::io::Result<Option<i32>
 
 fn server_stop(args: &[String]) -> std::io::Result<i32> {
     if !args.is_empty() {
-        eprintln!("usage: herdr server stop");
+        eprintln!("usage: velm server stop");
         return Ok(2);
     }
 
@@ -262,16 +262,16 @@ fn parse_live_handoff_params(args: &[String]) -> Option<ServerLiveHandoffParams>
 }
 
 fn print_server_help() {
-    eprintln!("herdr server commands:");
-    eprintln!("  herdr server                run as headless server");
+    eprintln!("velm server commands:");
+    eprintln!("  velm server                run as headless server");
     #[cfg(windows)]
-    eprintln!("  herdr server --allow-unelevated-clients  allow ordinary same-account clients to control an elevated server");
-    eprintln!("  herdr server stop           stop the running server via the API socket");
-    eprintln!("  herdr server live-handoff   hand off live panes to a new local server");
-    eprintln!("  herdr server reload-config  reload config.toml in the running server");
-    eprintln!("  herdr server agent-manifests [--json]  show agent detection manifest status");
-    eprintln!("  herdr server update-agent-manifests [--json]  fetch and reload agent detection manifests");
-    eprintln!("  herdr server reload-agent-manifests  reload agent detection manifests in the running server");
+    eprintln!("  velm server --allow-unelevated-clients  allow ordinary same-account clients to control an elevated server");
+    eprintln!("  velm server stop           stop the running server via the API socket");
+    eprintln!("  velm server live-handoff   hand off live panes to a new local server");
+    eprintln!("  velm server reload-config  reload config.toml in the running server");
+    eprintln!("  velm server agent-manifests [--json]  show agent detection manifest status");
+    eprintln!("  velm server update-agent-manifests [--json]  disabled in velm");
+    eprintln!("  velm server reload-agent-manifests  reload agent detection manifests in the running server");
 }
 
 #[cfg(test)]

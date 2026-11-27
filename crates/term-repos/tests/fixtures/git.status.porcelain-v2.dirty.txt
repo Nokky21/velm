@@ -1,0 +1,8 @@
+# branch.oid e846dd31fbf1a4739c92ddc8a75249f20e960a4f
+# branch.head main
+# branch.upstream origin/main
+# branch.ab +1 -0
+# stash 1
+2 R. N... 100644 100644 100644 78981922613b2afb6025042ff6bd878ac1994e85 78981922613b2afb6025042ff6bd878ac1994e85 R100 b.txt	a.txt
+1 .M N... 100644 100644 100644 f2ad6c76f0115a6ba5b00456a849810e7ec0af20 f2ad6c76f0115a6ba5b00456a849810e7ec0af20 c.txt
+? nuevo.md

@@ -481,6 +481,84 @@ pub struct ScreenTextRow {
     pub wrap_continuation: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RowSemanticPrompt {
+    None,
+    Prompt,
+    PromptContinuation,
+}
+
+impl RowSemanticPrompt {
+    fn from_raw(value: ffi::GhosttyRowSemanticPrompt) -> Self {
+        match value {
+            ffi::GhosttyRowSemanticPrompt_GHOSTTY_ROW_SEMANTIC_PROMPT => Self::Prompt,
+            ffi::GhosttyRowSemanticPrompt_GHOSTTY_ROW_SEMANTIC_PROMPT_CONTINUATION => {
+                Self::PromptContinuation
+            }
+            _ => Self::None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CellSemanticContent {
+    Output,
+    Input,
+    Prompt,
+}
+
+impl CellSemanticContent {
+    fn from_raw(value: ffi::GhosttyCellSemanticContent) -> Self {
+        match value {
+            ffi::GhosttyCellSemanticContent_GHOSTTY_CELL_SEMANTIC_INPUT => Self::Input,
+            ffi::GhosttyCellSemanticContent_GHOSTTY_CELL_SEMANTIC_PROMPT => Self::Prompt,
+            _ => Self::Output,
+        }
+    }
+}
+
+/// Owned tracked reference into a terminal screen/page-list that automatically
+/// follows scrolling, scrollback pruning, and resize/reflow.
+pub struct TrackedGridRef {
+    raw: ffi::GhosttyTrackedGridRef,
+}
+
+// SAFETY: TrackedGridRef is only queried behind the owning Terminal's lock.
+unsafe impl Send for TrackedGridRef {}
+
+impl Drop for TrackedGridRef {
+    fn drop(&mut self) {
+        if !self.raw.is_null() {
+            unsafe { ffi::ghostty_tracked_grid_ref_free(self.raw) };
+        }
+    }
+}
+
+impl TrackedGridRef {
+    pub fn has_value(&self) -> bool {
+        !self.raw.is_null() && unsafe { ffi::ghostty_tracked_grid_ref_has_value(self.raw) }
+    }
+
+    pub fn screen_point(&self) -> Result<Option<(u16, u32)>, Error> {
+        if self.raw.is_null() {
+            return Ok(None);
+        }
+        let mut out = ffi::GhosttyPointCoordinate::default();
+        let result = unsafe {
+            ffi::ghostty_tracked_grid_ref_point(
+                self.raw,
+                ffi::GhosttyPointTag_GHOSTTY_POINT_TAG_SCREEN,
+                &mut out,
+            )
+        };
+        if result == ffi::GhosttyResult_GHOSTTY_NO_VALUE {
+            return Ok(None);
+        }
+        result.into_result()?;
+        Ok(Some((out.x, out.y)))
+    }
+}
+
 impl CellWide {
     fn from_raw(value: ffi::GhosttyCellWide) -> Self {
         match value {
@@ -1753,8 +1831,54 @@ impl Terminal {
         self.get_u16(ffi::GhosttyTerminalData_GHOSTTY_TERMINAL_DATA_ROWS)
     }
 
+    pub fn cursor_x(&self) -> Result<u16, Error> {
+        self.get_u16(ffi::GhosttyTerminalData_GHOSTTY_TERMINAL_DATA_CURSOR_X)
+    }
+
     pub fn cursor_y(&self) -> Result<u16, Error> {
         self.get_u16(ffi::GhosttyTerminalData_GHOSTTY_TERMINAL_DATA_CURSOR_Y)
+    }
+
+    pub fn cursor_pending_wrap(&self) -> Result<bool, Error> {
+        self.get_bool(ffi::GhosttyTerminalData_GHOSTTY_TERMINAL_DATA_CURSOR_PENDING_WRAP)
+    }
+
+    pub fn cursor_screen_point(&self) -> Result<(u16, u32), Error> {
+        let total_rows = self.total_rows()?;
+        let rows = usize::from(self.rows()?);
+        let cols = self.cols()?;
+        if total_rows == 0 || cols == 0 {
+            return Ok((0, 0));
+        }
+        let viewport_start = total_rows.saturating_sub(rows);
+        let y = viewport_start
+            .saturating_add(usize::from(self.cursor_y()?))
+            .min(total_rows.saturating_sub(1));
+        let x = self.cursor_x()?.min(cols.saturating_sub(1));
+        Ok((x, y as u32))
+    }
+
+    pub fn track_screen_point(&self, x: u16, y: u32) -> Result<TrackedGridRef, Error> {
+        let mut raw = ptr::null_mut();
+        unsafe {
+            ffi::ghostty_terminal_grid_ref_track(
+                self.raw,
+                ghostty_screen_point(x, y),
+                &mut raw,
+            )
+            .into_result()?;
+        }
+        Ok(TrackedGridRef { raw })
+    }
+
+    pub fn row_semantic_prompt(&self, y: u32) -> Result<RowSemanticPrompt, Error> {
+        let grid_ref = self.grid_ref(ghostty_screen_point(0, y))?;
+        grid_ref_semantic_prompt(&grid_ref)
+    }
+
+    pub fn cell_semantic_content(&self, x: u16, y: u32) -> Result<CellSemanticContent, Error> {
+        let grid_ref = self.grid_ref(ghostty_screen_point(x, y))?;
+        grid_ref_semantic_content(&grid_ref)
     }
 
     pub fn effective_foreground_color(&self) -> Result<Option<RgbColor>, Error> {
@@ -2415,6 +2539,40 @@ fn grid_ref_wrap_state(grid_ref: &ffi::GhosttyGridRef) -> Result<(bool, bool), E
         .into_result()?;
     }
     Ok((soft_wrapped, wrap_continuation))
+}
+
+fn grid_ref_semantic_prompt(grid_ref: &ffi::GhosttyGridRef) -> Result<RowSemanticPrompt, Error> {
+    let mut row = 0;
+    unsafe {
+        ffi::ghostty_grid_ref_row(grid_ref, &mut row).into_result()?;
+    }
+    let mut prompt = ffi::GhosttyRowSemanticPrompt_GHOSTTY_ROW_SEMANTIC_NONE;
+    unsafe {
+        ffi::ghostty_row_get(
+            row,
+            ffi::GhosttyRowData_GHOSTTY_ROW_DATA_SEMANTIC_PROMPT,
+            (&mut prompt as *mut ffi::GhosttyRowSemanticPrompt).cast(),
+        )
+        .into_result()?;
+    }
+    Ok(RowSemanticPrompt::from_raw(prompt))
+}
+
+fn grid_ref_semantic_content(grid_ref: &ffi::GhosttyGridRef) -> Result<CellSemanticContent, Error> {
+    let mut raw = ffi::GhosttyCell::default();
+    unsafe {
+        ffi::ghostty_grid_ref_cell(grid_ref, &mut raw).into_result()?;
+    }
+    let mut semantic = ffi::GhosttyCellSemanticContent_GHOSTTY_CELL_SEMANTIC_OUTPUT;
+    unsafe {
+        ffi::ghostty_cell_get(
+            raw,
+            ffi::GhosttyCellData_GHOSTTY_CELL_DATA_SEMANTIC_CONTENT,
+            (&mut semantic as *mut ffi::GhosttyCellSemanticContent).cast(),
+        )
+        .into_result()?;
+    }
+    Ok(CellSemanticContent::from_raw(semantic))
 }
 
 fn kitty_placement_u32(
@@ -5075,5 +5233,44 @@ mod tests {
         assert!(basic.has_styling);
         assert_eq!(basic.style.fg_color, Some(CellColor::Palette(1)));
         assert!(!basic.has_hyperlink);
+    }
+
+    #[test]
+    fn semantic_prompt_and_tracked_grid_ref_survive_resize() {
+        let mut terminal = Terminal::new(12, 6, 4096).unwrap();
+        terminal.write(b"\x1b]133;A\x07~/WORK %\x1b]133;B\x07cmd\r\n");
+        assert_eq!(terminal.row_semantic_prompt(0).unwrap(), RowSemanticPrompt::Prompt);
+        assert_eq!(
+            terminal.cell_semantic_content(0, 0).unwrap(),
+            CellSemanticContent::Prompt
+        );
+        assert_eq!(
+            terminal.cell_semantic_content(8, 0).unwrap(),
+            CellSemanticContent::Input
+        );
+
+        terminal.write(b"\x1b]133;C\x07");
+        let start = terminal.track_screen_point(0, 1).unwrap();
+        terminal.write(b"0123456789ABCDEF\r\n");
+        let end = terminal.track_screen_point(0, 3).unwrap();
+        terminal.write(b"\x1b]133;D;0\x07\x1b]133;A\x07~/WORK %\x1b]133;B\x07");
+
+        assert_eq!(terminal.row_semantic_prompt(1).unwrap(), RowSemanticPrompt::None);
+        assert_eq!(
+            terminal.cell_semantic_content(0, 1).unwrap(),
+            CellSemanticContent::Output
+        );
+
+        // Resize wider so the soft-wrapped line unwraps, and verify tracked points follow.
+        terminal.resize(30, 6, 8, 16).unwrap();
+        let (sx, sy) = start.screen_point().unwrap().unwrap();
+        let (ex, ey) = end.screen_point().unwrap().unwrap();
+        assert_eq!((sx, sy), (0, 1));
+        assert_eq!((ex, ey), (0, 2));
+        let cols = terminal.cols().unwrap();
+        let text = terminal
+            .read_text_screen((sx, sy), (cols - 1, ey - 1), false)
+            .unwrap();
+        assert_eq!(text, "0123456789ABCDEF");
     }
 }

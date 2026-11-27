@@ -12,6 +12,7 @@ const FAKE_ANNOUNCEMENT_ID_ENV: &str = "HERDR_FAKE_PRODUCT_ANNOUNCEMENT_ID";
 const FAKE_ANNOUNCEMENT_TITLE_ENV: &str = "HERDR_FAKE_PRODUCT_ANNOUNCEMENT_TITLE";
 
 #[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(not(test), allow(dead_code))]
 pub struct ManifestAnnouncement {
     pub id: String,
     pub title: Option<String>,
@@ -78,6 +79,7 @@ pub fn store_path() -> PathBuf {
     crate::config::state_dir().join(PRODUCT_ANNOUNCEMENTS_PATH)
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn save_manifest_announcement(
     manifest_version: &str,
     announcement: Option<&ManifestAnnouncement>,
@@ -106,6 +108,7 @@ pub fn mark_seen(version: &str, id: &str) -> io::Result<()> {
     mark_seen_at(&store_path(), version, id)
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 fn announcement_from_manifest(
     manifest_version: &str,
     announcement: &ManifestAnnouncement,
@@ -163,12 +166,14 @@ fn load_fake_for_current_version() -> Option<ProductAnnouncement> {
     })
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 fn save_latest_to_path(path: &Path, announcement: ProductAnnouncement) -> io::Result<()> {
     let mut store = load_store_from_path(path).unwrap_or_default();
     store.latest = Some(StoredProductAnnouncement::from(&announcement));
     write_store_to_path(path, &store)
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 fn clear_latest_for_version(path: &Path, version: &str) -> io::Result<()> {
     let mut store = load_store_from_path(path).unwrap_or_default();
     if store

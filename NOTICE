@@ -1,0 +1,60 @@
+velm
+Copyright 2026 Nokky21 (Edgar)
+
+This product is a derivative work (fork) of herdr (v0.9.5),
+available at https://github.com/herdrdev/herdr and licensed under
+the Apache License, Version 2.0 (see LICENSE).
+
+Original upstream copyright and attribution:
+  herdr — https://github.com/herdrdev/herdr
+  Licensed under the Apache License, Version 2.0
+
+In accordance with Section 4(b) and Section 4(d) of the Apache License 2.0,
+the following upstream files were modified in this fork:
+
+  - Cargo.toml, Cargo.lock (renamed package/binary to `velm`, updated
+    repository/homepage metadata, added `crates/term-*` workspace members)
+  - README.md, CHANGELOG.md (velm documentation and fork changelog)
+  - crates/ghostty-vt/src/lib.rs (exposed semantic prompt/content getters)
+  - src/main.rs, src/cli.rs, src/cli/{plugin,server,spec}.rs,
+    src/session.rs, src/server/socket_paths.rs, src/api/{client,server}.rs,
+    src/config.rs, src/config/{io,model}.rs, src/logging.rs,
+    src/platform/mod.rs, src/plugin_installations.rs, src/plugin_paths.rs,
+    src/product_announcements.rs, src/release_notes.rs,
+    src/checksum.rs (renamed binary/app dirs/sockets/env vars to `velm` and
+    silently ignored the `[term]` configuration section)
+  - src/update.rs, src/detect/manifest.rs, src/detect/manifest_update.rs,
+    src/noninteractive_process.rs, src/remote/attach.rs
+    (removed remote update checks, self-update, GitHub plugin downloads,
+    and `curl` invocation)
+  - src/events.rs, src/pane.rs, src/pane/{osc,terminal}.rs,
+    src/terminal/runtime.rs, src/input/keybindings.rs,
+    src/app/{mod,runtime,custom_commands}.rs
+    (added OSC 133 command output tracking, `term.copy_last_output`, and
+    `term.explain_last`)
+  - src/client/tests/mod.rs and integration tests under tests/ (updated
+    assertions for `velm` naming, removed update/plugin-download behavior,
+    and OSC 133 support)
+
+The following files and crates were added for velm:
+
+  - NOTICE
+  - deny.toml, rust-toolchain.toml
+  - .github/workflows/term-ci.yml, .github/workflows/term-release.yml
+  - .github/ISSUE_TEMPLATE/bug_report.md,
+    .github/ISSUE_TEMPLATE/feature_request.md
+  - crates/term-config/
+  - crates/term-ai/
+  - crates/term-repos/
+  - crates/term-sql/
+  - crates/term-claude/
+  - docs/asistente.md, docs/repos.md, docs/sql.md, docs/claude.md
+  - extras/alacritty.toml
+  - shell/term.zsh
+  - scripts/mem.sh, scripts/net.sh, scripts/test_term_zsh.sh
+  - tests/fixtures/osc133.sample.sintetico.txt
+
+Vendored components carried from upstream herdr v0.9.5:
+  - vendor/portable-pty (see vendor/portable-pty for license notices)
+  - vendor/libghostty-vt (see vendor/libghostty-vt and
+    vendor/libghostty-vt.vendor.json for license notices)

@@ -455,6 +455,7 @@ pub(crate) use client_state::{create_private_state_file, replace_file, sync_pare
 pub(crate) fn begin_cli_output() {}
 
 #[cfg(not(unix))]
+#[allow(dead_code)]
 pub(crate) fn end_cli_output() {}
 
 #[cfg(target_os = "linux")]

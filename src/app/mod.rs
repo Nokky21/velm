@@ -579,31 +579,9 @@ impl App {
 
         state.terminals = restored_terminals;
 
-        // Background auto-update is disabled for non-persistent test apps
-        // and in debug/test builds so local development never mutates the
-        // running binary out from under spawned test processes.
-        let version_check_enabled =
-            background_update_check_enabled(policy.background_updates, config.update.version_check);
-        let manifest_check_enabled = background_update_check_enabled(
-            policy.background_updates,
-            config.update.manifest_check,
-        );
-        if version_check_enabled {
-            let update_tx = event_tx.clone();
-            if let Err(err) = crate::thread_spawn::spawn_named("herdr-update-check", move || {
-                crate::update::auto_update(update_tx)
-            }) {
-                tracing::warn!(err = %err, "failed to spawn update check thread");
-            }
-        }
-        if manifest_check_enabled {
-            let manifest_update_tx = event_tx.clone();
-            if let Err(err) = crate::thread_spawn::spawn_named("herdr-manifest-check", move || {
-                crate::detect::manifest_update::auto_update(manifest_update_tx)
-            }) {
-                tracing::warn!(err = %err, "failed to spawn agent manifest check thread");
-            }
-        }
+        // Background auto-update and remote manifest checks are permanently disabled in velm.
+        let version_check_enabled = false;
+        let manifest_check_enabled = false;
 
         let last_focus = state.active.and_then(|idx| {
             state
@@ -2006,7 +1984,7 @@ mod tests {
         );
         assert_eq!(
             app.state.config_diagnostic.as_deref(),
-            Some("config.toml; herdr config check")
+            Some("config.toml; velm config check")
         );
 
         std::env::remove_var(crate::config::CONFIG_PATH_ENV_VAR);
@@ -2068,7 +2046,7 @@ mod tests {
         assert_eq!(app.state.pane_borders, target_pane_borders);
         assert_eq!(
             app.state.config_diagnostic.as_deref(),
-            Some("config.toml has unknown keys; herdr config check")
+            Some("config.toml has unknown keys; velm config check")
         );
 
         std::env::remove_var(crate::config::CONFIG_PATH_ENV_VAR);
@@ -2197,7 +2175,7 @@ mod tests {
             .config_diagnostic
             .as_deref()
             .is_some_and(|message| {
-                message == "config.toml invalid; keeping current config; herdr config check"
+                message == "config.toml invalid; keeping current config; velm config check"
             }));
         assert!(app.state.toast.is_none());
 

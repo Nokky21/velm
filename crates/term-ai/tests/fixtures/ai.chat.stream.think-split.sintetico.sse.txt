@@ -1,0 +1,10 @@
+data: {"id":"chatcmpl-2","object":"chat.completion.chunk","created":1764000000,"model":"qwen3.8-9b-distill-uncensored-heretic","choices":[{"index":0,"delta":{"role":"assistant","content":"<thi"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-2","object":"chat.completion.chunk","created":1764000000,"model":"qwen3.8-9b-distill-uncensored-heretic","choices":[{"index":0,"delta":{"content":"nk>The user wants to list files. A ```zsh block with ls -la.</th"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-2","object":"chat.completion.chunk","created":1764000000,"model":"qwen3.8-9b-distill-uncensored-heretic","choices":[{"index":0,"delta":{"content":"ink>\n```zsh\nls -la\n```"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-2","object":"chat.completion.chunk","created":1764000000,"model":"qwen3.8-9b-distill-uncensored-heretic","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: [DONE]
+

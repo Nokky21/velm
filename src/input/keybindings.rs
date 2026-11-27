@@ -331,4 +331,34 @@ mod tests {
             Some(KeybindMatch::Action(KeybindAction::Help))
         ));
     }
+
+    #[test]
+    fn custom_term_commands_resolve_via_keybindings() {
+        let config: crate::config::Config = toml::from_str(
+            r#"
+[[keys.command]]
+key = "prefix+y"
+command = "term.copy_last_output"
+
+[[keys.command]]
+key = "prefix+E"
+command = "term.explain_last"
+"#,
+        )
+        .unwrap();
+        assert!(config.collect_diagnostics().is_empty());
+        let keybinds = config.keybinds();
+
+        let copy_key = TerminalKey::new(KeyCode::Char('y'), KeyModifiers::empty());
+        assert!(matches!(
+            resolve_prefix_binding(&keybinds, &copy_key),
+            Some(KeybindMatch::Command(cmd)) if cmd.command == "term.copy_last_output"
+        ));
+
+        let explain_key = TerminalKey::new(KeyCode::Char('E'), KeyModifiers::empty());
+        assert!(matches!(
+            resolve_prefix_binding(&keybinds, &explain_key),
+            Some(KeybindMatch::Command(cmd)) if cmd.command == "term.explain_last"
+        ));
+    }
 }

@@ -9,6 +9,10 @@ __pycache__/
 .DS_Store
 
 /docs/*
+!/docs/asistente.md
+!/docs/repos.md
+!/docs/sql.md
+!/docs/claude.md
 !/docs/next/
 !/docs/next/**
 !/docs/preview/

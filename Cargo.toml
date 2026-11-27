@@ -1,12 +1,12 @@
 [package]
-name = "herdr"
+name = "velm"
 version = "0.9.5"
 edition = "2021"
 build = "build.rs"
 description = "terminal workspace manager for AI coding agents"
 license = "Apache-2.0"
-repository = "https://github.com/herdrdev/herdr"
-homepage = "https://herdr.dev"
+repository = "https://github.com/Nokky21/velm"
+homepage = "https://github.com/Nokky21/velm"
 keywords = ["terminal", "tui", "ai", "agents", "multiplexer"]
 categories = ["command-line-utilities"]
 include = [
@@ -21,8 +21,8 @@ include = [
 ]
 
 [workspace]
-members = ["crates/ghostty-vt"]
-default-members = [".", "crates/ghostty-vt"]
+members = ["crates/ghostty-vt", "crates/term-config", "crates/term-repos", "crates/term-claude", "crates/term-ai", "crates/term-sql"]
+default-members = [".", "crates/ghostty-vt", "crates/term-config", "crates/term-repos", "crates/term-claude", "crates/term-ai", "crates/term-sql"]
 
 [dependencies]
 ghostty-vt = { path = "crates/ghostty-vt" }

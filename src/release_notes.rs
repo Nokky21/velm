@@ -30,10 +30,12 @@ pub fn pending_path() -> PathBuf {
     path
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn save_pending(version: &str, body: &str) -> std::io::Result<()> {
     save_pending_to_path(&pending_path(), version, body)
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 fn save_pending_to_path(path: &Path, version: &str, body: &str) -> std::io::Result<()> {
     let body = normalize_body(body);
     if body.is_empty() {
@@ -118,6 +120,7 @@ fn mark_current_version_seen_at(path: &Path, current_version: &str) -> std::io::
     write_stored_to_path(path, &stored)
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 fn clear_pending_at(path: &Path) -> std::io::Result<()> {
     if path.exists() {
         fs::remove_file(path)
@@ -126,6 +129,7 @@ fn clear_pending_at(path: &Path) -> std::io::Result<()> {
     }
 }
 
+#[allow(dead_code)]
 pub fn load_preview_from_local_changelog(version: &str) -> Option<ReleaseNotes> {
     let path = Path::new("CHANGELOG.md");
     let content = fs::read_to_string(path).ok()?;
@@ -137,6 +141,7 @@ pub fn load_preview_from_local_changelog(version: &str) -> Option<ReleaseNotes> 
     })
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 fn extract_version_section(content: &str, version: &str) -> Option<String> {
     let header = format!("## [{version}]");
     let mut collecting = false;

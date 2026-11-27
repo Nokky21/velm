@@ -1,0 +1,159 @@
+# Recommended Alacritty (>= 0.17) configuration for velm on macOS.
+# Copy or import into ~/.config/alacritty/alacritty.toml.
+
+[general]
+live_config_reload = true
+
+[window]
+# Only the left Option key acts as Alt so right Option still types @ # [ ] { } | \ ~ € on Spanish keyboards.
+option_as_alt = "OnlyLeft"
+decorations = "Full"
+padding = { x = 6, y = 6 }
+
+[font]
+size = 13.0
+
+[font.normal]
+family = "Menlo"
+style = "Regular"
+
+[terminal]
+# Launch velm via login zsh so Dock launches inherit ~/.cargo/bin and ~/.zshrc PATH.
+shell = { program = "/bin/zsh", args = ["-lc", "exec velm"] }
+
+# Catppuccin Mocha palette (matches velm default theme).
+[colors.primary]
+background = "#1e1e2e"
+foreground = "#cdd6f4"
+
+[colors.cursor]
+text = "#1e1e2e"
+cursor = "#f5e0dc"
+
+[colors.normal]
+black = "#45475a"
+red = "#f38ba8"
+green = "#a6e3a1"
+yellow = "#f9e2af"
+blue = "#89b4fa"
+magenta = "#f5c2e7"
+cyan = "#94e2d5"
+white = "#bac2de"
+
+[colors.bright]
+black = "#585b70"
+red = "#f38ba8"
+green = "#a6e3a1"
+yellow = "#f9e2af"
+blue = "#89b4fa"
+magenta = "#f5c2e7"
+cyan = "#94e2d5"
+white = "#a6adc8"
+
+# Cmd+* bindings for macOS: forward directly to velm prefix sequences (\u0002 = ctrl+b).
+# None of these use Option. Custom panel chords use prefix+alt+{r,s,l,e} to avoid
+# clashing with herdr built-in defaults (prefix+r=resize_mode, prefix+s=settings,
+# prefix+l=focus_pane_right, prefix+e=edit_scrollback).
+[[keyboard.bindings]]
+key = "T"
+mods = "Command"
+chars = "\u0002c"
+
+[[keyboard.bindings]]
+key = "W"
+mods = "Command"
+chars = "\u0002x"
+
+[[keyboard.bindings]]
+key = "D"
+mods = "Command"
+chars = "\u0002v"
+
+[[keyboard.bindings]]
+key = "D"
+mods = "Command|Shift"
+chars = "\u0002-"
+
+[[keyboard.bindings]]
+key = "LBracket"
+mods = "Command"
+chars = "\u0002p"
+
+[[keyboard.bindings]]
+key = "RBracket"
+mods = "Command"
+chars = "\u0002n"
+
+[[keyboard.bindings]]
+key = "Return"
+mods = "Command|Shift"
+chars = "\u0002z"
+
+[[keyboard.bindings]]
+key = "Key1"
+mods = "Command"
+chars = "\u00021"
+
+[[keyboard.bindings]]
+key = "Key2"
+mods = "Command"
+chars = "\u00022"
+
+[[keyboard.bindings]]
+key = "Key3"
+mods = "Command"
+chars = "\u00023"
+
+[[keyboard.bindings]]
+key = "Key4"
+mods = "Command"
+chars = "\u00024"
+
+[[keyboard.bindings]]
+key = "Key5"
+mods = "Command"
+chars = "\u00025"
+
+[[keyboard.bindings]]
+key = "Key6"
+mods = "Command"
+chars = "\u00026"
+
+[[keyboard.bindings]]
+key = "Key7"
+mods = "Command"
+chars = "\u00027"
+
+[[keyboard.bindings]]
+key = "Key8"
+mods = "Command"
+chars = "\u00028"
+
+[[keyboard.bindings]]
+key = "Key9"
+mods = "Command"
+chars = "\u00029"
+
+# Explain last command output (velm custom command bound to prefix+alt+e).
+[[keyboard.bindings]]
+key = "E"
+mods = "Command"
+chars = "\u0002\u001be"
+
+# Open term-repos panel (velm custom command bound to prefix+alt+r).
+[[keyboard.bindings]]
+key = "R"
+mods = "Command|Shift"
+chars = "\u0002\u001br"
+
+# Open term-sql panel (velm custom command bound to prefix+alt+s).
+[[keyboard.bindings]]
+key = "S"
+mods = "Command|Shift"
+chars = "\u0002\u001bs"
+
+# Open term-claude panel (velm custom command bound to prefix+alt+l).
+[[keyboard.bindings]]
+key = "L"
+mods = "Command|Shift"
+chars = "\u0002\u001bl"

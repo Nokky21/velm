@@ -1,0 +1,8 @@
+data: {"id":"chatcmpl-3","object":"chat.completion.chunk","created":1764000000,"model":"qwen3.8-9b-distill-uncensored-heretic","choices":[{"index":0,"delta":{"role":"assistant","content":"<think>Let me consider several options for finding large files. First"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-3","object":"chat.completion.chunk","created":1764000000,"model":"qwen3.8-9b-distill-uncensored-heretic","choices":[{"index":0,"delta":{"content":", find could work, but du might be"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-3","object":"chat.completion.chunk","created":1764000000,"model":"qwen3.8-9b-distill-uncensored-heretic","choices":[{"index":0,"delta":{},"finish_reason":"length"}]}
+
+data: [DONE]
+

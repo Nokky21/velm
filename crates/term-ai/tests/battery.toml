@@ -1,0 +1,186 @@
+[[case]]
+id = "large-files"
+prompt = "buscar archivos mayores de 100MB en el directorio actual"
+expected = [
+  "find . -type f -size +100M",
+]
+
+[[case]]
+id = "disk-usage-subdirs"
+prompt = "ver el tamaño de las carpetas del directorio actual ordenadas de mayor a menor"
+expected = [
+  "du -sh */ | sort -hr",
+  "du -h -d 1 | sort -hr",
+]
+
+[[case]]
+id = "listening-ports"
+prompt = "listar los puertos TCP que están escuchando"
+expected = [
+  "lsof -iTCP -sTCP:LISTEN -n -P",
+  "lsof -nP -iTCP -sTCP:LISTEN",
+]
+
+[[case]]
+id = "process-on-port"
+prompt = "ver qué proceso está usando el puerto 8080"
+expected = [
+  "lsof -i :8080",
+  "lsof -nP -i :8080",
+]
+
+[[case]]
+id = "git-last-10-commits"
+prompt = "ver los últimos 10 commits en una línea"
+expected = [
+  "git log -n 10 --oneline",
+  "git log --oneline -n 10",
+]
+
+[[case]]
+id = "git-untracked-cleanup-dry-run"
+prompt = "mostrar qué archivos sin seguimiento borraría git clean sin borrarlos"
+expected = [
+  "git clean -nd",
+  "git clean -n",
+]
+
+[[case]]
+id = "git-branches-by-date"
+prompt = "listar ramas locales ordenadas por fecha del último commit"
+expected = [
+  "git branch --sort=-committerdate",
+]
+
+[[case]]
+id = "git-search-commit-msg"
+prompt = "buscar commits cuyo mensaje contenga timeout"
+expected = [
+  "git log --grep=timeout",
+  "git log --grep=\"timeout\"",
+]
+
+[[case]]
+id = "count-rust-lines"
+prompt = "contar cuántas líneas tienen todos los archivos .rs en src"
+expected = [
+  "find src -name '*.rs' -print0 | xargs -0 wc -l",
+  "wc -l src/**/*.rs",
+]
+
+[[case]]
+id = "tar-gz-extract-dir"
+prompt = "descomprimir backup.tar.gz en la carpeta destino"
+expected = [
+  "tar -xzf backup.tar.gz -C destino",
+  "tar xzf backup.tar.gz -C destino",
+]
+
+[[case]]
+id = "tar-gz-create"
+prompt = "comprimir la carpeta logs en logs.tar.gz"
+expected = [
+  "tar -czf logs.tar.gz logs",
+  "tar czf logs.tar.gz logs",
+]
+
+[[case]]
+id = "grep-todo-recursive"
+prompt = "buscar TODO con número de línea dentro de src"
+expected = [
+  "grep -rn \"TODO\" src",
+  "rg -n \"TODO\" src",
+]
+
+[[case]]
+id = "recent-modified-files"
+prompt = "buscar archivos modificados en las últimas 24 horas"
+expected = [
+  "find . -type f -mtime -1",
+]
+
+[[case]]
+id = "jq-pretty-keys"
+prompt = "sacar las claves principales de un archivo data.json usando jq"
+expected = [
+  "jq 'keys' data.json",
+]
+
+[[case]]
+id = "tail-follow-log"
+prompt = "seguir en tiempo real las últimas 50 líneas de app.log"
+expected = [
+  "tail -n 50 -f app.log",
+  "tail -f -n 50 app.log",
+]
+
+[[case]]
+id = "chmod-executable"
+prompt = "dar permisos de ejecución al script deploy.sh"
+expected = [
+  "chmod +x deploy.sh",
+]
+
+[[case]]
+id = "symlink-create"
+prompt = "crear un enlace simbólico llamado current que apunte a release-2"
+expected = [
+  "ln -s release-2 current",
+]
+
+[[case]]
+id = "sha256-mac"
+prompt = "calcular el hash sha256 de archive.zip en macOS"
+expected = [
+  "shasum -a 256 archive.zip",
+]
+
+[[case]]
+id = "copy-to-clipboard"
+prompt = "copiar la salida de pwd al portapapeles de macOS"
+expected = [
+  "pwd | pbcopy",
+]
+
+[[case]]
+id = "env-sort"
+prompt = "mostrar todas las variables de entorno ordenadas alfabéticamente"
+expected = [
+  "env | sort",
+]
+
+[[case]]
+id = "diff-two-dirs"
+prompt = "comparar recursivamente las carpetas dir_a y dir_b"
+expected = [
+  "diff -ru dir_a dir_b",
+  "diff -r dir_a dir_b",
+]
+
+[[case]]
+id = "sed-replace-in-place-macos"
+prompt = "reemplazar foo por bar en config.txt in-place con sed de macOS"
+expected = [
+  "sed -i '' 's/foo/bar/g' config.txt",
+]
+
+[[case]]
+id = "curl-headers-only"
+prompt = "ver solo las cabeceras HTTP de http://127.0.0.1:8080/health"
+expected = [
+  "curl -I http://127.0.0.1:8080/health",
+]
+
+[[case]]
+id = "git-stash-list"
+prompt = "listar todos los stashes guardados en git"
+expected = [
+  "git stash list",
+]
+
+[[case]]
+id = "non-shell-request"
+prompt = "explícame qué es un monoid en teoría de categorías"
+expected = [
+  "NO_COMMAND",
+]
