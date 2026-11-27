@@ -350,57 +350,57 @@ mod tests {
 
     #[test]
     fn homebrew_cellar_path_is_detected() {
-        let path = Path::new("/opt/homebrew/Cellar/herdr/0.5.9/bin/herdr");
+        let path = Path::new("/opt/homebrew/Cellar/velm/0.5.9/bin/velm");
 
         assert!(is_homebrew_managed_exe_path(path));
         assert_eq!(
             homebrew_cellar_keg_root(path).unwrap(),
-            PathBuf::from("/opt/homebrew/Cellar/herdr/0.5.9")
+            PathBuf::from("/opt/homebrew/Cellar/velm/0.5.9")
         );
     }
 
     #[test]
     fn homebrew_linux_cellar_path_is_detected() {
-        let path = Path::new("/home/linuxbrew/.linuxbrew/Cellar/herdr/0.5.9/bin/herdr");
+        let path = Path::new("/home/linuxbrew/.linuxbrew/Cellar/velm/0.5.9/bin/velm");
 
         assert!(is_homebrew_managed_exe_path(path));
     }
 
     #[test]
     fn homebrew_opt_path_requires_canonicalized_cellar_target() {
-        let path = Path::new("/opt/homebrew/opt/herdr/bin/herdr");
+        let path = Path::new("/opt/homebrew/opt/velm/bin/velm");
 
         assert!(!is_homebrew_managed_exe_path(path));
     }
 
     #[test]
     fn non_homebrew_path_is_not_detected() {
-        let path = Path::new("/usr/local/bin/herdr");
+        let path = Path::new("/usr/local/bin/velm");
 
         assert!(!is_homebrew_managed_exe_path(path));
     }
 
     #[test]
     fn mise_install_path_is_detected() {
-        let path = Path::new("/home/user/.local/share/mise/installs/herdr/0.6.6/bin/herdr");
+        let path = Path::new("/home/user/.local/share/mise/installs/velm/0.6.6/bin/velm");
 
         assert!(is_mise_managed_exe_path(path));
         assert_eq!(
             mise_install_root(path).unwrap(),
-            PathBuf::from("/home/user/.local/share/mise/installs/herdr/0.6.6")
+            PathBuf::from("/home/user/.local/share/mise/installs/velm/0.6.6")
         );
     }
 
     #[test]
     fn mise_alias_install_path_is_detected() {
-        let path = Path::new("/home/user/.local/share/mise/installs/herdr/latest/bin/herdr");
+        let path = Path::new("/home/user/.local/share/mise/installs/velm/latest/bin/velm");
 
         assert!(is_mise_managed_exe_path(path));
     }
 
     #[test]
     fn mise_custom_installs_dir_path_is_detected() {
-        let path = Path::new("/opt/mise-tools/installs/herdr/0.6.6/bin/herdr");
+        let path = Path::new("/opt/mise-tools/installs/velm/0.6.6/bin/velm");
 
         assert!(is_mise_managed_exe_path(path));
     }
@@ -410,12 +410,12 @@ mod tests {
         let _guard = env_lock().lock().unwrap();
         let previous = std::env::var_os(MISE_INSTALLS_DIR_ENV);
         std::env::set_var(MISE_INSTALLS_DIR_ENV, "/opt/mise-tools");
-        let path = Path::new("/opt/mise-tools/herdr/0.6.6/bin/herdr");
+        let path = Path::new("/opt/mise-tools/velm/0.6.6/bin/velm");
 
         assert!(is_mise_managed_exe_path(path));
         assert_eq!(
             mise_install_root(path).unwrap(),
-            PathBuf::from("/opt/mise-tools/herdr/0.6.6")
+            PathBuf::from("/opt/mise-tools/velm/0.6.6")
         );
 
         if let Some(previous) = previous {
@@ -427,7 +427,7 @@ mod tests {
 
     #[test]
     fn non_mise_install_path_is_not_detected() {
-        let path = Path::new("/home/user/.local/bin/herdr");
+        let path = Path::new("/home/user/.local/bin/velm");
 
         assert!(!is_mise_managed_exe_path(path));
     }

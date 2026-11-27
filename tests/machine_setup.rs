@@ -20,7 +20,7 @@ if [ "$FAKE_STRICT_HOST_KEY_FAILURE" = yes ] && [ "$strict_host_key_check" = yes
     echo 'Host key verification failed.' >&2
     exit 255
 fi
-if [ "$last" = 'command -v herdr' ]; then
+if [ "$last" = 'command -v velm' ] || [ "$last" = 'command -v herdr' ]; then
     if [ "$FAKE_INSTALLED" != missing ]; then echo /home/remote/.local/bin/herdr; fi
     exit 0
 fi
@@ -62,7 +62,7 @@ case "$script" in
         echo start >>"$FAKE_ROOT/actions"; echo 'test startup failure' >&2; exit 1 ;;
     *'mkdir -p'*) printf '/fake/tmp\000/fake/herdr\000' ;;
     *'chmod 755'*) echo install >>"$FAKE_ROOT/actions"; touch "$FAKE_ROOT/installed" ;;
-    *'command -v herdr'*) if [ "$FAKE_INSTALLED" != missing ]; then echo /home/remote/.local/bin/herdr; fi ;;
+    *'command -v velm'*|*'command -v herdr'*) if [ "$FAKE_INSTALLED" != missing ]; then echo /home/remote/.local/bin/herdr; fi ;;
     *'test -x '*) exit 1 ;;
     *) echo "unexpected fake SSH script: $script" >&2; exit 1 ;;
 esac

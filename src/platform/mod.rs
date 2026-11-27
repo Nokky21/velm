@@ -444,7 +444,7 @@ impl PtyInputGuard {
 pub(crate) mod unix_image_files;
 #[cfg(unix)]
 pub(crate) use unix_common::{
-    begin_cli_output, end_cli_output, forward_remote_bridge_stdio, ignore_server_hangup,
+    begin_cli_output, forward_remote_bridge_stdio, ignore_server_hangup,
     local_stream_peer_description, spawn_server_signal_monitor, RemoteBridgeWake,
 };
 
@@ -453,10 +453,6 @@ pub(crate) use client_state::{create_private_state_file, replace_file, sync_pare
 
 #[cfg(not(unix))]
 pub(crate) fn begin_cli_output() {}
-
-#[cfg(not(unix))]
-#[allow(dead_code)]
-pub(crate) fn end_cli_output() {}
 
 #[cfg(target_os = "linux")]
 mod linux;

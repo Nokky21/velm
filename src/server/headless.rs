@@ -410,14 +410,13 @@ impl HeadlessServer {
     /// - Handles scheduled tasks (session save, metadata expiry, etc.)
     /// - Renders virtually and streams frames to clients
     pub async fn run(&mut self) -> io::Result<()> {
-        crate::logging::startup("server");
-
         let server_stop = self.server_stop.clone();
         let quit_notify = self.server_event_tx.clone();
         crate::platform::spawn_server_signal_monitor(move |signal| {
             server_stop.request(ShutdownReason::Signal(signal));
             let _ = quit_notify.try_send(ServerEvent::QuitSignal);
         });
+        crate::logging::startup("server");
         let quit_notify = self.server_event_tx.clone();
         let _host_shutdown = crate::platform::HostShutdownMonitor::start(
             self.host_shutdown_requested.clone(),

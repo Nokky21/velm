@@ -16,17 +16,19 @@ the following upstream files were modified in this fork:
     repository/homepage metadata, added `crates/term-*` workspace members)
   - README.md, CHANGELOG.md (velm documentation and fork changelog)
   - crates/ghostty-vt/src/lib.rs (exposed semantic prompt/content getters)
+  - .github/workflows/ci.yml (gated upstream herdr CI jobs to
+    `herdrdev/herdr` so `velm` PRs use `term-ci.yml`)
   - src/main.rs, src/cli.rs, src/cli/{plugin,server,spec}.rs,
-    src/session.rs, src/server/socket_paths.rs, src/api/{client,server}.rs,
+    src/session.rs, src/server/{autodetect,headless,socket_paths}.rs, src/api/{client,server}.rs,
     src/config.rs, src/config/{io,model}.rs, src/logging.rs,
-    src/platform/mod.rs, src/plugin_installations.rs, src/plugin_paths.rs,
-    src/product_announcements.rs, src/release_notes.rs,
+    src/platform/{mod,unix_common}.rs, src/plugin_installations.rs,
+    src/plugin_paths.rs, src/product_announcements.rs, src/release_notes.rs,
     src/checksum.rs (renamed binary/app dirs/sockets/env vars to `velm` and
     silently ignored the `[term]` configuration section)
   - src/update.rs, src/detect/manifest.rs, src/detect/manifest_update.rs,
     src/noninteractive_process.rs, src/remote/attach.rs
     (removed remote update checks, self-update, GitHub plugin downloads,
-    and `curl` invocation)
+    and `curl` invocation; added `velm` remote binary discovery)
   - src/events.rs, src/pane.rs, src/pane/{osc,terminal}.rs,
     src/terminal/runtime.rs, src/input/keybindings.rs,
     src/app/{mod,runtime,custom_commands}.rs
@@ -39,6 +41,7 @@ the following upstream files were modified in this fork:
 The following files and crates were added for velm:
 
   - NOTICE
+  - assets/velm-banner.svg
   - deny.toml, rust-toolchain.toml
   - .github/workflows/term-ci.yml, .github/workflows/term-release.yml
   - .github/ISSUE_TEMPLATE/bug_report.md,

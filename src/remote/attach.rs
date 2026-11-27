@@ -1581,13 +1581,17 @@ emit() {
     fi
 }
 if [ -n "$home" ]; then
+    emit "$home/.cargo/bin/velm"
+    emit "$home/.local/bin/velm"
     emit "$home/.local/bin/herdr"
 fi
 "#,
     );
     if platform.os == "macos" {
         script.push_str(
-            r#"    emit "/opt/homebrew/bin/herdr"
+            r#"    emit "/opt/homebrew/bin/velm"
+    emit "/usr/local/bin/velm"
+    emit "/opt/homebrew/bin/herdr"
     emit "/usr/local/bin/herdr"
 "#,
         );
@@ -1619,23 +1623,29 @@ fn remote_binary_on_path_any(
     ssh: &RemoteSsh,
     remote_herdr: &RemoteHerdr,
 ) -> io::Result<Option<RemoteHerdr>> {
-    let output = ssh.posix_user_shell_output("command -v herdr")?;
-    if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        if let Some(candidate) = remote_herdr_from_path_discovery(remote_herdr, &stdout) {
-            return Ok(Some(candidate));
+    for binary in ["velm", "herdr"] {
+        let output = ssh.posix_user_shell_output(&format!("command -v {binary}"))?;
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if let Some(candidate) = remote_herdr_from_path_discovery(remote_herdr, &stdout) {
+                return Ok(Some(candidate));
+            }
         }
     }
 
     // Non-POSIX login shells such as xonsh reject `command -v`; retry through
     // /bin/sh while retaining the login-shell probe for shell-initialized PATHs.
-    let output = ssh.sh_output("command -v herdr\n")?;
-    if !output.status.success() {
-        return Ok(None);
+    for binary in ["velm", "herdr"] {
+        let output = ssh.sh_output(&format!("command -v {binary}\n"))?;
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if let Some(candidate) = remote_herdr_from_path_discovery(remote_herdr, &stdout) {
+                return Ok(Some(candidate));
+            }
+        }
     }
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    Ok(remote_herdr_from_path_discovery(remote_herdr, &stdout))
+    Ok(None)
 }
 
 fn remote_herdrs_from_path_discovery(remote_herdr: &RemoteHerdr, stdout: &str) -> Vec<RemoteHerdr> {
@@ -2417,6 +2427,7 @@ fn posix_remote_api_discovery_command(platform: &RemotePlatform, session: &str) 
     let script = format!(
         r#"set -f
 candidates=$(
+command -v velm
 command -v herdr
 {discovery}
 )
