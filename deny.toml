@@ -5,6 +5,9 @@ all-features = true
 ignore = [
     # Pre-existing in upstream herdr v0.9.5 Cargo.lock (Rule 6: do not update upstream deps unprompted)
     { id = "RUSTSEC-2025-0141", reason = "bincode 2.0.1 is unmaintained upstream in herdr v0.9.5" },
+    { id = "RUSTSEC-2026-0370", reason = "zvariant 5.15.0 is pulled by Linux-only zbus 5.19.0 locked in herdr v0.9.5 (merged into zbus 6)" },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names 4.3.4 is pulled by Linux-only zbus 5.19.0 locked in herdr v0.9.5 (merged into zbus 6)" },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive 5.15.0 is pulled by Linux-only zbus 5.19.0 locked in herdr v0.9.5 (merged into zbus 6)" },
     { id = "RUSTSEC-2026-0386", reason = "tokio 1.50.0 is locked in herdr v0.9.5" },
 ]
 
