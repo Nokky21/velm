@@ -6,23 +6,24 @@
 <br />
 
 [![CI (term-ci)](https://github.com/Nokky21/velm/actions/workflows/term-ci.yml/badge.svg)](https://github.com/Nokky21/velm/actions/workflows/term-ci.yml)
-![Plataforma: macOS Apple Silicon](https://img.shields.io/badge/macOS-Apple%20Silicon%20(arm64)-1e1e2e?logo=apple&logoColor=cdd6f4&labelColor=313244)
+![Plataformas: macOS · Linux · Windows](https://img.shields.io/badge/plataformas-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows-1e1e2e?labelColor=313244)
 ![Rust 1.96.1](https://img.shields.io/badge/Rust-1.96.1-f38ba8?logo=rust&logoColor=cdd6f4&labelColor=313244)
 ![Privacidad: Cero telemetría](https://img.shields.io/badge/privacidad-cero%20telemetr%C3%ADa-a6e3a1?labelColor=313244)
 [![Licencia: Apache-2.0](https://img.shields.io/badge/licencia-Apache--2.0-89b4fa?labelColor=313244)](LICENSE)
 
 <p>
-  <strong>Multiplexor de terminal en Rust para el día a día en macOS (Apple Silicon) dentro de <a href="https://alacritty.org/">Alacritty</a></strong>,<br />
-  acompañado de herramientas locales desacopladas (<code>term-*</code>) con <strong>privacidad verificable</strong> y bajo consumo de memoria.
+  <strong>Multiplexor de terminal en Rust para macOS, Linux y Windows</strong>,<br />
+  con marcas semánticas <code>OSC 133</code>, herramientas locales desacopladas (<code>term-*</code>) y <strong>privacidad verificable</strong>.
 </p>
 
 <p>
+  <a href="https://nokky21.github.io/velm/">Landing web</a> ·
+  <a href="#instalación-rápida">Instalación</a> ·
   <a href="#arquitectura">Arquitectura</a> ·
   <a href="#suite-modular-term-">Suite <code>term-*</code></a> ·
-  <a href="#instalación-macos-apple-silicon">Instalación</a> ·
   <a href="#atajos-de-teclado">Atajos</a> ·
   <a href="#verificación-de-privacidad">Privacidad</a> ·
-  <a href="#medición-de-memoria">Memoria</a> ·
+  <a href="#compatibilidad-por-plataforma">Plataformas</a> ·
   <a href="#documentación">Documentación</a>
 </p>
 
@@ -32,13 +33,49 @@
 
 > **Sobre el fork:** `velm` es un fork de [`herdrdev/herdr`](https://github.com/herdrdev/herdr) (`v0.9.5`) bajo licencia [Apache-2.0](LICENSE). Consulta [NOTICE](NOTICE) para ver la atribución completa y el inventario exacto de ficheros modificados y añadidos.
 
+## Instalación rápida
+
+### macOS (Apple Silicon / Intel) y Linux (x86_64 / arm64)
+
+Instalador automático con verificación SHA-256 ([`scripts/install.sh`](scripts/install.sh)):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Nokky21/velm/main/scripts/install.sh | sh
+```
+
+### Windows 10 / 11 (x86_64 · PowerShell)
+
+Instalador PowerShell con verificación SHA-256 y alta en `PATH` de usuario ([`scripts/install.ps1`](scripts/install.ps1)):
+
+```powershell
+irm https://raw.githubusercontent.com/Nokky21/velm/main/scripts/install.ps1 | iex
+```
+
+### Compilar desde código fuente (cualquier plataforma)
+
+Requiere **Rust `1.96.1`** (fijado por [`rust-toolchain.toml`](rust-toolchain.toml)) y **Zig `0.16.0`** en el `PATH` (requerido por [`crates/ghostty-vt/build.rs`](crates/ghostty-vt/build.rs)):
+
+```bash
+git clone https://github.com/Nokky21/velm && cd velm
+cargo install --path . --locked
+cargo install --path crates/term-ai --locked
+cargo install --path crates/term-repos --locked
+cargo install --path crates/term-sql --locked
+cargo install --path crates/term-claude --locked
+```
+
+> [!TIP]
+> También puedes descargar los binarios comprimidos y su `SHA256SUMS.txt` directamente desde [GitHub Releases](https://github.com/Nokky21/velm/releases) (`macos-arm64`, `macos-x86_64`, `linux-x86_64`, `linux-arm64`, `windows-x86_64`), o consultar la guía interactiva en [`site/index.html`](site/index.html) ([GitHub Pages](https://nokky21.github.io/velm/)).
+
+---
+
 ## Por qué `velm`
 
 | Principio | Qué garantiza en la práctica |
 |---|---|
 | **Privacidad verificable** | Sin telemetría, sin comprobación de actualizaciones (`update` eliminado) y sin descarga remota de plugins. Auditado en CI con `cargo-deny`, chequeo estático de código y monitorización `lsof`. |
 | **Modular y opt-in** | Todas las herramientas `crates/term-*` arrancan apagadas (`enabled = false`). Activas solo lo que usas en `~/.config/velm/config.toml`. |
-| **Ligero sobre Alacritty** | Usa **Alacritty `0.17.0`** oficial sin parchear junto con [`extras/alacritty.toml`](extras/alacritty.toml), conservando `@ # [ ] { } \| \ ~ €` con `Option` derecha en teclado español (`option_as_alt = "OnlyLeft"`). |
+| **Tu terminal sin modificar** | Funciona dentro de **Alacritty**, **Ghostty**, **WezTerm**, **Kitty** o **Windows Terminal**. Incluye [`extras/alacritty.toml`](extras/alacritty.toml) (`option_as_alt = "OnlyLeft"` para conservar `@ # [ ] { } \| \ ~ €` con `Option` derecha en teclado español). |
 | **Semántica de shell (`OSC 133`)** | [`shell/term.zsh`](shell/term.zsh) emite marcas `OSC 133` (`A`/`B`/`C`/`D`) para copiar o explicar la salida del último comando al instante. |
 | **Aislado de `herdr`** | Configuración propia en `~/.config/velm/config.toml` y sockets propios (`velm.sock`, `velm-client.sock`). Ignora silenciosamente la sección `[term]`. |
 
@@ -48,7 +85,7 @@
 
 ```mermaid
 flowchart LR
-    A["Alacritty 0.17.0<br/>extras/alacritty.toml"] --> V["velm<br/>Multiplexor · OSC 133 · velm.sock"]
+    A["Alacritty · Ghostty · WezTerm · WT"] --> V["velm<br/>Multiplexor · OSC 133 · velm.sock"]
     V --> Z["zsh + shell/term.zsh<br/>Marcas A/B/C/D · Widget ^G"]
     V --> AI["term-ai<br/>HTTP loopback sin TLS"]
     V --> REPOS["term-repos<br/>Git solo lectura"]
@@ -67,64 +104,49 @@ Todas las herramientas comparten validación centralizada en [`crates/term-confi
 |---|---|---|---|---|
 | **`term-ai`** | Sugiere comandos en `zsh` (`Ctrl+G`), explica la salida del último comando (`term.explain_last`), diagnostica (`doctor`) y ejecuta batería (`bench`). | **Solo HTTP en loopback** (`127.0.0.1`, `::1`, `localhost`), `ureq` compilado **sin TLS**, sin redirecciones. Comenta con `#` comandos destructivos. | CLI / streaming | [docs/asistente.md](docs/asistente.md) |
 | **`term-repos`** | Panel TUI para ver estado, ramas, cambios y worktrees de tus repositorios Git locales en paralelo. | **Solo lectura.** Invoca `git` con `GIT_OPTIONAL_LOCKS=0` y `GIT_TERMINAL_PROMPT=0`. Red solo si pulsas `r`. | TUI / `--json` | [docs/repos.md](docs/repos.md) |
-| **`term-sql`** | Cliente TUI de Postgres para entornos `local` y `dev` con modo lectura por defecto y escritura controlada (`F2`). | **`env = "prod"` prohibido.** Credenciales solo en el **Llavero de macOS**. Análisis AST (`sqlparser`), confirmaciones explícitas y cuenta atrás de transacción. | TUI / CLI `conn` | [docs/sql.md](docs/sql.md) |
+| **`term-sql`** | Cliente TUI de Postgres para entornos `local` y `dev` con modo lectura por defecto y escritura controlada (`F2`). | **`env = "prod"` prohibido.** Credenciales en el **Llavero de macOS**. Análisis AST (`sqlparser`), confirmaciones explícitas y cuenta atrás de transacción. | TUI / CLI `conn` | [docs/sql.md](docs/sql.md) |
 | **`term-claude`** | Supervisa sesiones de Claude Code desde `~/.claude/projects`: contexto actual, tokens, `sidechain` y coste. | **Solo lectura local** y cero red. Deduplicación estricta por `message.id`, cálculo por `cost-state` o precios configurados y alerta de contexto. | TUI / `--json` | [docs/claude.md](docs/claude.md) |
 
 ---
 
-## Instalación (macOS Apple Silicon)
+## Configuración inicial
 
-### 1. Requisitos previos
-
-- **macOS en Apple Silicon (`arm64`)** y Xcode Command Line Tools (`xcode-select --install`).
-- **Rust `1.96.1`** (fijado automáticamente por [`rust-toolchain.toml`](rust-toolchain.toml)).
-- **Zig `0.16.0`** en el `PATH` (requerido por [`crates/ghostty-vt/build.rs`](crates/ghostty-vt/build.rs) para compilar `libghostty-vt`).
-
-### 2. Instalar Alacritty `0.17.0`
+### 1. Terminal recomendado en macOS: Alacritty `0.17.0`
 
 > [!NOTE]
 > El cask de Homebrew `alacritty` está deshabilitado desde el 2026-09-01 por Gatekeeper. Instala Alacritty `0.17.0` desde el **DMG oficial** en las [releases de Alacritty](https://github.com/alacritty/alacritty/releases/tag/v0.17.0).
-
-Copia la configuración recomendada (tema Catppuccin Mocha, `option_as_alt = "OnlyLeft"` y atajos `Cmd+*`):
 
 ```bash
 mkdir -p ~/.config/alacritty
 cp extras/alacritty.toml ~/.config/alacritty/alacritty.toml
 ```
 
-### 3. Instalar `velm` y las herramientas `term-*`
+### 2. Integración de shell (`zsh` y autocompletado)
 
-Puedes descargar el binario precompilado `macos-arm64` cuando haya una release publicada en [GitHub Releases](https://github.com/Nokky21/velm/releases), o compilar e instalar desde la raíz del repositorio:
-
-```bash
-cargo install --path . --locked
-cargo install --path crates/term-ai --locked
-cargo install --path crates/term-repos --locked
-cargo install --path crates/term-sql --locked
-cargo install --path crates/term-claude --locked
-```
-
-Asegúrate de que `~/.cargo/bin` esté en tu `PATH` dentro de `~/.zshrc`. Al abrir Alacritty desde el Dock, [`extras/alacritty.toml`](extras/alacritty.toml) arranca `/bin/zsh -lc "exec velm"`.
-
-### 4. Activar integración de `zsh` y configuración `[term]`
-
-Añade a tu `~/.zshrc`:
+Añade a tu `~/.zshrc` para activar marcas `OSC 133` y el widget `Ctrl+G`:
 
 ```zsh
 source /ruta/a/velm/shell/term.zsh
 ```
 
-Genera la configuración base si todavía no existe:
+Autocompletado nativo para `zsh`, `bash`, `fish`, `elvish` o `powershell`:
+
+```bash
+velm completion zsh > ~/.zfunc/_velm
+# También: velm completion bash | fish | powershell
+```
+
+### 3. Archivo `~/.config/velm/config.toml`
+
+Genera la configuración base:
 
 ```bash
 mkdir -p ~/.config/velm
 velm --default-config > ~/.config/velm/config.toml
 ```
 
-Activa en `~/.config/velm/config.toml` solo las herramientas que quieras usar y registra sus comandos personalizados (los atajos `Cmd+*` de [`extras/alacritty.toml`](extras/alacritty.toml) ya apuntan a estas secuencias):
-
 <details open>
-<summary><strong>Ejemplo de configuración para <code>~/.config/velm/config.toml</code></strong></summary>
+<summary><strong>Ejemplo de configuración para activar <code>[term]</code> y los atajos rápidos</strong></summary>
 
 ```toml
 [[keys.command]]
@@ -196,24 +218,35 @@ La privacidad se valida en **tres capas independientes**:
 
 | Capa | Herramienta / Script | Qué comprueba |
 |---|---|---|
-| **1. Dependencias y TLS** | `cargo deny check` ([`deny.toml`](deny.toml)) | Bloquea `reqwest`, `ureq`, `hyper`, `isahc`, `curl`, `surf`, `attohttpc` y cualquier crate TLS (`rustls`, `native-tls`, `openssl`) fuera de los wrappers permitidos (`term-ai` —`ureq` sin TLS— y `term-sql`). |
+| **1. Dependencias y TLS** | `cargo deny check` ([`deny.toml`](deny.toml)) | Bloquea `reqwest`, `hyper`, `isahc`, `curl`, `surf`, `attohttpc` y todo crate TLS (`rustls`, `native-tls`, `openssl`) en todo el workspace; solo `term-ai` compila `ureq` sin TLS. |
 | **2. Análisis estático en CI** | [`.github/workflows/term-ci.yml`](.github/workflows/term-ci.yml) | Verifica en cada push y PR que no exista `std::net` fuera de `term-ai`/`term-sql` ni llamadas a `curl`, `wget` o `nc` fuera de tests. |
 | **3. Auditoría en tiempo real** | [`./scripts/net.sh`](scripts/net.sh) | Inspecciona `alacritty` y `velm` (sin contar shells hijas) con `lsof -i -P -n` cada 5 s y falla si detecta cualquier conexión de red. |
 
 ```bash
-# Auditoría de dependencias y licencias
 cargo deny check
-
-# Monitorización en vivo (10 min por defecto, o prueba rápida de 1 min)
-./scripts/net.sh
-./scripts/net.sh 1
+./scripts/net.sh        # 10 minutos por defecto
+./scripts/net.sh 1      # comprobación rápida de 1 minuto
 ```
+
+---
+
+## Compatibilidad por plataforma
+
+| Componente | macOS (arm64 / x86_64) | Linux (x86_64 / arm64) | Windows (x86_64) |
+|---|---|---|---|
+| **`velm` multiplexor + `OSC 133`** | Nativo | Nativo (musl) | Nativo (ConPTY) |
+| **`term-ai`** (loopback sin TLS) | Nativo | Nativo | Nativo |
+| **`term-repos`** (Git solo lectura) | Nativo | Nativo | Nativo |
+| **`term-claude`** (sesiones locales) | Nativo | Nativo | Nativo |
+| **`term-sql`** (Postgres `local`/`dev`) | Nativo (Llavero macOS) | Compila (Keyring en roadmap) | Compila (Cred. Manager en roadmap) |
+| **Integración `shell/term.zsh`** | Nativo (`zsh`) | Nativo (`zsh`) | WSL / Git Bash |
+| **Auditoría `net.sh` / `mem.sh`** | `lsof` + `vmmap` | `net.sh` (`lsof`) | Monitor de recursos / PowerShell |
 
 ---
 
 ## Medición de memoria
 
-La métrica oficial es el **Physical footprint** devuelto por `vmmap --summary <pid>` (equivalente a la columna *Memoria* del Monitor de Actividad), sumando **Alacritty + servidor de `velm` + cliente de `velm`** (excluyendo las shells y procesos hijos dentro de cada panel).
+En macOS la métrica oficial es el **Physical footprint** devuelto por `vmmap --summary <pid>` (equivalente a la columna *Memoria* del Monitor de Actividad), sumando **Alacritty + servidor de `velm` + cliente de `velm`** (excluyendo las shells y procesos hijos dentro de cada panel).
 
 [`scripts/mem.sh`](scripts/mem.sh) ejecuta 3 rondas aisladas por escenario y devuelve la **mediana en MiB**:
 
@@ -235,6 +268,7 @@ VELM_MEM_INCLUDE_E4=1 ./scripts/mem.sh
 
 | Recurso | Contenido |
 |---|---|
+| [Landing interactiva (`site/index.html`)](site/index.html) | Demos TUI interactivas, descargas por SO y generador visual de `config.toml` |
 | [Asistente local (`term-ai`) y `OSC 133`](docs/asistente.md) | Autodetección de LM Studio / Ollama / `llama.cpp`, `suggest`, `explain`, `doctor`, `bench` y códigos de salida |
 | [Panel de repositorios (`term-repos`)](docs/repos.md) | Configuración `[term.repos]`, atajos TUI y esquema `--json` |
 | [Panel Postgres seguro (`term-sql`)](docs/sql.md) | Modelo de seguridad `local`/`dev`, Llavero de macOS (`conn add/rm/list`), reglas AST y transacciones |

@@ -30,7 +30,7 @@
     <circle cx="22" cy="18" r="5.5" fill="#f38ba8"/>
     <circle cx="40" cy="18" r="5.5" fill="#f9e2af"/>
     <circle cx="58" cy="18" r="5.5" fill="#a6e3a1"/>
-    <text x="480" y="22" text-anchor="middle" fill="#6c7086" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="12">alacritty — velm · macOS Apple Silicon</text>
+    <text x="480" y="22" text-anchor="middle" fill="#6c7086" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="12">velm · macOS · Linux · Windows</text>
 
     <!-- Left column: identity -->
     <g transform="translate(48, 72)">
@@ -41,7 +41,7 @@
       <text x="208" y="31" text-anchor="middle" fill="#cdd6f4" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="11" font-weight="600">local-first</text>
 
       <!-- Tagline -->
-      <text x="0" y="76" fill="#cdd6f4" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="500">Multiplexor de terminal en Rust para el día a día en macOS</text>
+      <text x="0" y="76" fill="#cdd6f4" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="500">Multiplexor de terminal en Rust · Rápido, local y verificable</text>
       <text x="0" y="100" fill="#a6adc8" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5">Cero telemetría · Marcas OSC 133 · Suite modular term-* apagada por defecto</text>
 
       <!-- Feature pills -->

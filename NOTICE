@@ -12,13 +12,14 @@ Original upstream copyright and attribution:
 In accordance with Section 4(b) and Section 4(d) of the Apache License 2.0,
 the following upstream files were modified in this fork:
 
-  - Cargo.toml, Cargo.lock (renamed package/binary to `velm`, updated
-    repository/homepage metadata, added `crates/term-*` workspace members)
+  - Cargo.toml, Cargo.lock, build.rs (renamed package/binary to `velm`,
+    updated repository/homepage/description metadata, removed upstream
+    contributor build warning, added `crates/term-*` workspace members)
   - README.md, CHANGELOG.md (velm documentation and fork changelog)
   - crates/ghostty-vt/src/lib.rs (exposed semantic prompt/content getters)
   - .github/workflows/ci.yml (gated upstream herdr CI jobs to
     `herdrdev/herdr` so `velm` PRs use `term-ci.yml`)
-  - src/main.rs, src/cli.rs, src/cli/{plugin,server,spec}.rs,
+  - src/main.rs, src/cli.rs, src/cli/{completion,plugin,server,spec}.rs,
     src/session.rs, src/server/{autodetect,headless,socket_paths}.rs, src/api/{client,server}.rs,
     src/config.rs, src/config/{io,model}.rs, src/logging.rs,
     src/platform/{mod,unix_common}.rs, src/plugin_installations.rs,
@@ -42,8 +43,10 @@ The following files and crates were added for velm:
 
   - NOTICE
   - assets/velm-banner.svg
+  - site/index.html, site/favicon.svg
   - deny.toml, rust-toolchain.toml
-  - .github/workflows/term-ci.yml, .github/workflows/term-release.yml
+  - .github/workflows/term-ci.yml, .github/workflows/term-release.yml,
+    .github/workflows/pages.yml
   - .github/ISSUE_TEMPLATE/bug_report.md,
     .github/ISSUE_TEMPLATE/feature_request.md
   - crates/term-config/
@@ -54,7 +57,8 @@ The following files and crates were added for velm:
   - docs/asistente.md, docs/repos.md, docs/sql.md, docs/claude.md
   - extras/alacritty.toml
   - shell/term.zsh
-  - scripts/mem.sh, scripts/net.sh, scripts/test_term_zsh.sh
+  - scripts/install.sh, scripts/install.ps1, scripts/mem.sh,
+    scripts/net.sh, scripts/test_term_zsh.sh
   - tests/fixtures/osc133.sample.sintetico.txt
 
 Vendored components carried from upstream herdr v0.9.5:

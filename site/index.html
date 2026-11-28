@@ -1,0 +1,1976 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>velm — Multiplexor de terminal en Rust · Local, rápido y verificable</title>
+  <meta name="description" content="velm es un multiplexor de terminal en Rust para macOS, Linux y Windows con marcas OSC 133, cero telemetría verificable y herramientas locales modulares (term-ai, term-repos, term-sql, term-claude)." />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0a0b0d;
+      --bg-elevated: #111317;
+      --bg-surface: #16191f;
+      --bg-hover: #1c2028;
+      --border: rgba(255, 255, 255, 0.085);
+      --border-strong: rgba(255, 255, 255, 0.16);
+      --text: #f3f4f6;
+      --text-secondary: #9ca3af;
+      --text-muted: #6b7280;
+      --accent: #2dd4bf;
+      --accent-dim: rgba(45, 212, 191, 0.12);
+      --accent-ink: #042f2e;
+      --ok: #34d399;
+      --warn: #f59e0b;
+      --danger: #f87171;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --max-w: 1140px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      line-height: 1.6;
+      background:
+        radial-gradient(ellipse 80% 45% at 50% -12%, rgba(45, 212, 191, 0.075), transparent 65%),
+        var(--bg);
+      position: relative;
+    }
+
+    a { color: inherit; text-decoration: none; }
+    button { font: inherit; color: inherit; cursor: pointer; }
+    code, pre, kbd { font-family: var(--font-mono); }
+
+    .container {
+      width: 100%;
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Navigation */
+    .nav {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      background: rgba(10, 11, 13, 0.84);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .nav-inner {
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-mono);
+      font-weight: 600;
+      font-size: 16px;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-mark {
+      width: 24px;
+      height: 24px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-strong);
+      color: var(--accent);
+      font-size: 13px;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      font-size: 13.5px;
+      color: var(--text-secondary);
+    }
+
+    .nav-links a:hover { color: var(--text); }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 13.5px;
+      font-weight: 500;
+      border: 1px solid transparent;
+      transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+    }
+
+    .btn-ghost {
+      background: transparent;
+      border-color: var(--border);
+      color: var(--text-secondary);
+    }
+    .btn-ghost:hover {
+      background: var(--bg-surface);
+      border-color: var(--border-strong);
+      color: var(--text);
+    }
+
+    .btn-primary {
+      background: var(--text);
+      color: #0a0b0d;
+      font-weight: 600;
+    }
+    .btn-primary:hover {
+      background: #ffffff;
+      transform: translateY(-1px);
+    }
+
+    /* Hero */
+    .hero {
+      padding: 72px 0 64px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.12fr);
+      gap: 44px;
+      align-items: center;
+    }
+
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin: 0 0 14px;
+    }
+
+    h1 {
+      margin: 0 0 18px;
+      font-size: clamp(34px, 4.4vw, 52px);
+      line-height: 1.07;
+      letter-spacing: -0.035em;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .hero-copy {
+      margin: 0 0 28px;
+      font-size: 16px;
+      line-height: 1.65;
+      color: var(--text-secondary);
+      max-width: 50ch;
+    }
+
+    .hero-copy code {
+      font-size: 0.9em;
+      color: var(--text);
+      background: var(--bg-surface);
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+    }
+
+    /* Quick install widget */
+    .install-box {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      margin-bottom: 18px;
+    }
+
+    .install-tabs {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      padding: 0 8px;
+      background: rgba(255, 255, 255, 0.015);
+    }
+
+    .tab-group {
+      display: flex;
+      gap: 2px;
+      overflow-x: auto;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      padding: 10px 12px;
+      font-size: 12.5px;
+      font-weight: 500;
+      color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      white-space: nowrap;
+      transition: color 0.15s ease, border-color 0.15s ease;
+    }
+
+    .tab-btn:hover { color: var(--text-secondary); }
+    .tab-btn[aria-selected="true"] {
+      color: var(--text);
+      border-bottom-color: var(--accent);
+    }
+
+    .install-cmd-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+    }
+
+    .install-cmd {
+      margin: 0;
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      color: var(--text);
+      overflow-x: auto;
+      white-space: nowrap;
+      scrollbar-width: thin;
+    }
+
+    .install-cmd .prompt { color: var(--accent); user-select: none; margin-right: 8px; }
+
+    .copy-btn {
+      flex-shrink: 0;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      border-radius: var(--radius-sm);
+      padding: 6px 10px;
+      font-size: 12px;
+      font-family: var(--font-mono);
+      transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    }
+    .copy-btn:hover {
+      background: var(--bg-hover);
+      border-color: var(--border-strong);
+      color: var(--text);
+    }
+    .copy-btn.copied {
+      color: var(--accent);
+      border-color: rgba(45, 212, 191, 0.4);
+    }
+
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      font-size: 12.5px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    .hero-meta span { display: inline-flex; align-items: center; gap: 6px; }
+    .hero-meta .dot { color: var(--accent); }
+
+    /* Interactive Terminal Showcase */
+    .terminal-window {
+      background: #0d0f13;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+      overflow: hidden;
+    }
+
+    .terminal-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 14px;
+      background: #13161c;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .traffic-lights {
+      display: flex;
+      gap: 7px;
+      align-items: center;
+    }
+
+    .traffic-lights i {
+      display: block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #2b303b;
+    }
+    .traffic-lights i:nth-child(1) { background: #ef4444; opacity: 0.78; }
+    .traffic-lights i:nth-child(2) { background: #f59e0b; opacity: 0.78; }
+    .traffic-lights i:nth-child(3) { background: #10b981; opacity: 0.78; }
+
+    .term-tabs {
+      display: flex;
+      gap: 4px;
+      overflow-x: auto;
+    }
+
+    .term-tab {
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 5px;
+      padding: 4px 9px;
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      color: var(--text-muted);
+      transition: all 0.15s ease;
+    }
+    .term-tab:hover { color: var(--text-secondary); background: rgba(255,255,255,0.03); }
+    .term-tab[aria-selected="true"] {
+      color: var(--text);
+      background: var(--bg-surface);
+      border-color: var(--border-strong);
+    }
+
+    .terminal-body {
+      padding: 16px;
+      min-height: 360px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.55;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .tui-split {
+      display: grid;
+      grid-template-columns: 148px 1fr;
+      gap: 14px;
+      flex: 1;
+    }
+
+    .tui-sidebar {
+      border-right: 1px solid var(--border);
+      padding-right: 12px;
+      color: var(--text-secondary);
+    }
+
+    .tui-section-label {
+      font-size: 10.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .tui-ws {
+      padding: 4px 8px;
+      border-radius: 4px;
+      margin-bottom: 3px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11.5px;
+    }
+    .tui-ws.active { background: rgba(45, 212, 191, 0.12); color: var(--text); }
+    .tui-badge-ok { color: var(--ok); }
+    .tui-badge-warn { color: var(--warn); }
+    .tui-badge-danger { color: var(--danger); }
+    .tui-dim { color: var(--text-muted); }
+    .tui-accent { color: var(--accent); }
+
+    .tui-pane-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .tui-divider {
+      border: 0;
+      border-top: 1px solid var(--border);
+      margin: 4px 0;
+    }
+
+    .tui-statusbar {
+      margin-top: 14px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .tui-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11.5px;
+    }
+    .tui-table th {
+      text-align: left;
+      font-weight: 500;
+      color: var(--text-muted);
+      padding: 4px 6px 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .tui-table td {
+      padding: 6px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      white-space: nowrap;
+    }
+    .tui-row-selected { background: rgba(255, 255, 255, 0.045); }
+
+    .sql-mode-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 10px;
+      border-radius: 5px;
+      margin-bottom: 10px;
+      font-size: 11.5px;
+      font-weight: 600;
+    }
+    .sql-mode-bar.read {
+      background: rgba(16, 185, 129, 0.12);
+      color: var(--ok);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+    }
+    .sql-mode-bar.write {
+      background: rgba(239, 68, 68, 0.14);
+      color: var(--danger);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .mini-toggle {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-strong);
+      color: var(--text);
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-family: var(--font-mono);
+    }
+    .mini-toggle:hover { background: var(--bg-hover); }
+
+    /* Sections */
+    section.block {
+      padding: 76px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .section-head {
+      max-width: 660px;
+      margin-bottom: 42px;
+    }
+
+    .section-head h2 {
+      margin: 0 0 12px;
+      font-size: clamp(24px, 3vw, 34px);
+      line-height: 1.15;
+      letter-spacing: -0.03em;
+      font-weight: 700;
+    }
+
+    .section-head p {
+      margin: 0;
+      font-size: 15.5px;
+      color: var(--text-secondary);
+    }
+
+    /* 3-step Architecture */
+    .steps-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 20px;
+    }
+
+    .step-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .step-num {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .step-card h3 {
+      margin: 0;
+      font-size: 17px;
+      letter-spacing: -0.015em;
+    }
+
+    .step-card p {
+      margin: 0;
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+
+    .step-foot {
+      margin-top: auto;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      color: var(--text-muted);
+    }
+
+    /* Suite Explorer */
+    .suite-layout {
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr);
+      gap: 24px;
+      align-items: start;
+    }
+
+    .suite-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .suite-item {
+      text-align: left;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 14px 16px;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    .suite-item:hover { background: var(--bg-surface); }
+    .suite-item[aria-selected="true"] {
+      background: var(--bg-surface);
+      border-color: var(--border-strong);
+      box-shadow: inset 2px 0 0 var(--accent);
+    }
+    .suite-item strong {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 14px;
+      margin-bottom: 3px;
+    }
+    .suite-item span {
+      display: block;
+      font-size: 12.5px;
+      color: var(--text-secondary);
+    }
+
+    .suite-panel {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 28px;
+    }
+
+    .suite-panel-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+
+    .suite-panel h3 {
+      margin: 0;
+      font-size: 21px;
+      letter-spacing: -0.02em;
+    }
+
+    .suite-policy {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--accent);
+      background: var(--accent-dim);
+      padding: 4px 9px;
+      border-radius: 5px;
+    }
+
+    .suite-panel p {
+      margin: 0 0 18px;
+      font-size: 14.5px;
+      color: var(--text-secondary);
+    }
+
+    .bullet-list {
+      margin: 0 0 22px;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 8px;
+    }
+    .bullet-list li {
+      position: relative;
+      padding-left: 18px;
+      font-size: 13.5px;
+      color: var(--text-secondary);
+    }
+    .bullet-list li::before {
+      content: "›";
+      position: absolute;
+      left: 2px;
+      color: var(--accent);
+      font-family: var(--font-mono);
+      font-weight: 700;
+    }
+    .bullet-list li strong { color: var(--text); font-weight: 500; }
+
+    .code-snippet {
+      background: #0b0d10;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text);
+      overflow-x: auto;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .code-snippet pre { margin: 0; white-space: pre; line-height: 1.55; }
+
+    .doc-link {
+      font-size: 13px;
+      font-family: var(--font-mono);
+      color: var(--accent);
+    }
+    .doc-link:hover { text-decoration: underline; }
+
+    /* Privacy section */
+    .privacy-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 28px;
+      align-items: stretch;
+    }
+
+    .privacy-layers {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .layer-row {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 18px 20px;
+    }
+    .layer-row h3 {
+      margin: 0 0 6px;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .layer-row h3 code {
+      font-size: 12px;
+      color: var(--accent);
+      font-weight: 500;
+    }
+    .layer-row p {
+      margin: 0;
+      font-size: 13.5px;
+      color: var(--text-secondary);
+    }
+
+    .audit-terminal {
+      background: #0d0f13;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.65;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .audit-terminal pre { margin: 0; white-space: pre-wrap; }
+
+    /* Downloads & Platform Guide */
+    .os-switcher {
+      display: inline-flex;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 4px;
+      gap: 4px;
+      margin-bottom: 24px;
+    }
+
+    .os-btn {
+      background: transparent;
+      border: none;
+      padding: 9px 18px;
+      border-radius: var(--radius-sm);
+      font-size: 13.5px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      transition: all 0.15s ease;
+    }
+    .os-btn:hover { color: var(--text); }
+    .os-btn[aria-selected="true"] {
+      background: var(--bg-surface);
+      color: var(--text);
+      box-shadow: inset 0 0 0 1px var(--border-strong);
+    }
+
+    .platform-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.85fr);
+      gap: 24px;
+      margin-bottom: 36px;
+    }
+
+    .platform-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 24px;
+    }
+
+    .platform-card h3 {
+      margin: 0 0 8px;
+      font-size: 17px;
+      letter-spacing: -0.015em;
+    }
+
+    .platform-card p {
+      margin: 0 0 14px;
+      font-size: 13.5px;
+      color: var(--text-secondary);
+    }
+
+    .step-label {
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin: 16px 0 6px;
+    }
+    .step-label:first-of-type { margin-top: 8px; }
+
+    .artifact-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .artifact-link {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      background: #0b0d10;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+    .artifact-link:hover {
+      border-color: var(--border-strong);
+      background: var(--bg-surface);
+    }
+    .artifact-link strong {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      color: var(--text);
+    }
+    .artifact-link span {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .artifact-arrow {
+      font-family: var(--font-mono);
+      color: var(--accent);
+      font-size: 14px;
+    }
+
+    /* Compatibility matrix */
+    .matrix-wrap {
+      overflow-x: auto;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+    }
+
+    .matrix {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .matrix th, .matrix td {
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    .matrix th {
+      font-size: 12px;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      font-weight: 500;
+      background: rgba(255,255,255,0.015);
+    }
+    .matrix tr:last-child td { border-bottom: none; }
+    .matrix td:first-child { font-weight: 500; color: var(--text); }
+    .tag-ok { color: var(--ok); font-family: var(--font-mono); font-size: 12px; }
+    .tag-note { color: var(--text-secondary); font-size: 12px; }
+
+    /* Config Builder + Keybindings */
+    .config-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+      gap: 24px;
+      align-items: start;
+    }
+
+    .toggle-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .toggle-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 14px 16px;
+      cursor: pointer;
+    }
+    .toggle-item:hover { border-color: var(--border-strong); }
+    .toggle-item strong {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 13px;
+    }
+    .toggle-item span {
+      display: block;
+      font-size: 12.5px;
+      color: var(--text-secondary);
+    }
+
+    .switch {
+      width: 38px;
+      height: 22px;
+      appearance: none;
+      background: #262a33;
+      border-radius: 999px;
+      position: relative;
+      flex-shrink: 0;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .switch::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #d1d5db;
+      transition: transform 0.15s ease, background 0.15s ease;
+    }
+    .switch:checked { background: var(--accent); }
+    .switch:checked::after {
+      transform: translateX(16px);
+      background: var(--accent-ink);
+    }
+
+    .config-output {
+      background: #0d0f13;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+    }
+    .config-output-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: #13161c;
+      border-bottom: 1px solid var(--border);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .config-output pre {
+      margin: 0;
+      padding: 16px;
+      font-size: 12px;
+      line-height: 1.6;
+      overflow-x: auto;
+      max-height: 360px;
+    }
+
+    .keys-grid {
+      margin-top: 28px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .key-item {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 11px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 12.5px;
+      color: var(--text-secondary);
+    }
+    kbd {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-strong);
+      border-radius: 4px;
+      padding: 2px 7px;
+      font-size: 11.5px;
+      color: var(--text);
+      white-space: nowrap;
+    }
+
+    /* Footer */
+    footer {
+      padding: 40px 0 56px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .footer-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .footer-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 18px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+    .footer-links a:hover { color: var(--text); }
+
+    @media (max-width: 960px) {
+      .hero-grid,
+      .suite-layout,
+      .privacy-grid,
+      .platform-grid,
+      .config-grid {
+        grid-template-columns: 1fr;
+      }
+      .steps-grid,
+      .keys-grid {
+        grid-template-columns: 1fr;
+      }
+      .nav-links { display: none; }
+      .tui-split { grid-template-columns: 1fr; }
+      .tui-sidebar { border-right: none; border-bottom: 1px solid var(--border); padding: 0 0 10px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="nav">
+    <div class="container nav-inner">
+      <a class="brand" href="#top" aria-label="velm inicio">
+        <span class="brand-mark">›_</span>
+        <span>velm</span>
+      </a>
+      <nav class="nav-links" aria-label="Secciones principales">
+        <a href="#como-funciona">Cómo funciona</a>
+        <a href="#herramientas">Suite term-*</a>
+        <a href="#privacidad">Privacidad</a>
+        <a href="#descargar">Descargar</a>
+        <a href="#configurador">Configurador</a>
+      </nav>
+      <div class="nav-actions">
+        <a class="btn btn-ghost" href="https://github.com/Nokky21/velm" target="_blank" rel="noopener">GitHub</a>
+        <a class="btn btn-primary" href="#descargar">Instalar</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="top">
+    <!-- Hero -->
+    <section class="hero">
+      <div class="container hero-grid">
+        <div>
+          <p class="eyebrow">Rust · libghostty-vt · Apache-2.0</p>
+          <h1>Multiplexor de terminal. Local, rápido y verificable.</h1>
+          <p class="hero-copy">
+            Organiza sesiones persistentes, paneles y marcas semánticas <code>OSC 133</code> dentro de tu terminal favorito en
+            <strong>macOS, Linux y Windows</strong>, acompañado de herramientas modulares <code>term-*</code> apagadas por defecto y cero telemetría.
+          </p>
+
+          <div class="install-box" aria-label="Instalación rápida">
+            <div class="install-tabs">
+              <div class="tab-group" role="tablist" aria-label="Sistema operativo">
+                <button class="tab-btn" role="tab" id="hero-tab-macos" data-hero-os="macos" aria-selected="true">macOS</button>
+                <button class="tab-btn" role="tab" id="hero-tab-linux" data-hero-os="linux" aria-selected="false">Linux</button>
+                <button class="tab-btn" role="tab" id="hero-tab-windows" data-hero-os="windows" aria-selected="false">Windows</button>
+                <button class="tab-btn" role="tab" id="hero-tab-cargo" data-hero-os="cargo" aria-selected="false">Cargo</button>
+              </div>
+            </div>
+            <div class="install-cmd-row">
+              <pre class="install-cmd"><span class="prompt" id="hero-prompt">$</span><code id="hero-cmd">curl -fsSL https://raw.githubusercontent.com/Nokky21/velm/main/scripts/install.sh | sh</code></pre>
+              <button class="copy-btn" id="hero-copy-btn" type="button">Copiar</button>
+            </div>
+          </div>
+
+          <div class="hero-meta">
+            <span><span class="dot">●</span> 0 telemetría</span>
+            <span><span class="dot">●</span> Apple Silicon / Intel / Linux / Windows</span>
+            <span><span class="dot">●</span> Fork de herdr v0.9.5</span>
+          </div>
+        </div>
+
+        <!-- Interactive Terminal Preview -->
+        <div class="terminal-window" aria-label="Vista previa interactiva de velm">
+          <div class="terminal-bar">
+            <div class="traffic-lights" aria-hidden="true"><i></i><i></i><i></i></div>
+            <div class="term-tabs" role="tablist" aria-label="Demostraciones TUI">
+              <button class="term-tab" role="tab" data-demo="velm" aria-selected="true">velm</button>
+              <button class="term-tab" role="tab" data-demo="ai" aria-selected="false">term-ai</button>
+              <button class="term-tab" role="tab" data-demo="repos" aria-selected="false">term-repos</button>
+              <button class="term-tab" role="tab" data-demo="sql" aria-selected="false">term-sql</button>
+              <button class="term-tab" role="tab" data-demo="claude" aria-selected="false">term-claude</button>
+            </div>
+          </div>
+          <div class="terminal-body" id="terminal-demo-body"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- How it works -->
+    <section class="block" id="como-funciona">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">Arquitectura</p>
+          <h2>Cómo funciona en tres capas limpias</h2>
+          <p>
+            No te obliga a abandonar tu emulador de terminal ni a instalar un entorno pesado en Electron.
+            Cada capa tiene una responsabilidad concreta y se puede inspeccionar por separado.
+          </p>
+        </div>
+
+        <div class="steps-grid">
+          <article class="step-card">
+            <span class="step-num">01 / VENTANA</span>
+            <h3>Tu terminal de siempre</h3>
+            <p>
+              Corre dentro de Alacritty, Ghostty, WezTerm, Kitty o Windows Terminal. Incluye
+              <code>extras/alacritty.toml</code> con <code>option_as_alt = "OnlyLeft"</code> para conservar
+              <code>@ # [ ] { } | \ ~ €</code> en teclado español.
+            </p>
+            <div class="step-foot">Alacritty 0.17 · Ghostty · WezTerm · WT</div>
+          </article>
+
+          <article class="step-card">
+            <span class="step-num">02 / MULTIPLEXOR</span>
+            <h3>Servidor velm + OSC 133</h3>
+            <p>
+              Fork de <code>herdr v0.9.5</code> con sockets propios (<code>velm.sock</code>), sesiones persistentes,
+              sin comprobaciones de actualización ni descargas ocultas. Captura marcas <code>OSC 133</code> para copiar o explicar cualquier comando.
+            </p>
+            <div class="step-foot">~/.config/velm/config.toml · velm.sock</div>
+          </article>
+
+          <article class="step-card">
+            <span class="step-num">03 / HERRAMIENTAS</span>
+            <h3>Suite term-* bajo demanda</h3>
+            <p>
+              Cuatro binarios Rust desacoplados con validación compartida en <code>term-config</code>.
+              Todos arrancan con <code>enabled = false</code>: activas únicamente lo que necesitas en tu flujo diario.
+            </p>
+            <div class="step-foot">term-ai · term-repos · term-sql · term-claude</div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Modular Suite -->
+    <section class="block" id="herramientas">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">Suite modular</p>
+          <h2>Cuatro herramientas locales, cero sorpresas</h2>
+          <p>
+            Cada binario funciona tanto dentro de un panel de <code>velm</code> como desde cualquier shell, con salida TUI interactiva o <code>--json</code> para automatización.
+          </p>
+        </div>
+
+        <div class="suite-layout">
+          <div class="suite-list" role="tablist" aria-label="Herramientas term-*">
+            <button class="suite-item" role="tab" data-tool="ai" aria-selected="true">
+              <strong>term-ai</strong>
+              <span>Sugerencias en zsh y explicación OSC 133</span>
+            </button>
+            <button class="suite-item" role="tab" data-tool="repos" aria-selected="false">
+              <strong>term-repos</strong>
+              <span>Panel Git multi-repo de solo lectura</span>
+            </button>
+            <button class="suite-item" role="tab" data-tool="sql" aria-selected="false">
+              <strong>term-sql</strong>
+              <span>Postgres seguro para local y dev</span>
+            </button>
+            <button class="suite-item" role="tab" data-tool="claude" aria-selected="false">
+              <strong>term-claude</strong>
+              <span>Sesiones, tokens y costes de Claude Code</span>
+            </button>
+          </div>
+
+          <div class="suite-panel" id="suite-panel"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Privacy -->
+    <section class="block" id="privacidad">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">Privacidad verificable</p>
+          <h2>No te pedimos confianza: te damos los comandos para auditarlo</h2>
+          <p>
+            Ningún binario conecta con ningún destino externo que no hayas configurado o pedido en ese momento. Sin telemetría, sin <code>update</code> y sin descarga remota de plugins.
+          </p>
+        </div>
+
+        <div class="privacy-grid">
+          <div class="privacy-layers">
+            <div class="layer-row">
+              <h3>01 · Auditoría de dependencias <code>cargo deny check</code></h3>
+              <p>
+                <code>deny.toml</code> bloquea <code>reqwest</code>, <code>hyper</code>, <code>isahc</code>, <code>curl</code>, <code>surf</code>, <code>attohttpc</code> y todo crate TLS (<code>rustls</code>, <code>native-tls</code>, <code>openssl</code>). Solo <code>term-ai</code> compila <code>ureq</code> sin TLS.
+              </p>
+            </div>
+            <div class="layer-row">
+              <h3>02 · Chequeo estático en CI <code>term-ci.yml</code></h3>
+              <p>
+                En cada push y pull request se verifica que no exista <code>std::net</code> fuera de <code>term-ai</code>/<code>term-sql</code> ni llamadas a subprocesos <code>curl</code>, <code>wget</code> o <code>nc</code> fuera de tests.
+              </p>
+            </div>
+            <div class="layer-row">
+              <h3>03 · Monitorización en vivo <code>./scripts/net.sh</code></h3>
+              <p>
+                Inspecciona los procesos <code>alacritty</code> y <code>velm</code> con <code>lsof -i -P -n</code> cada 5 s durante 10 min (excluyendo shells hijas) y falla con código 1 si aparece una sola conexión de red.
+              </p>
+            </div>
+          </div>
+
+          <div class="audit-terminal" aria-label="Ejemplo de salida de auditoría de privacidad">
+            <pre><span class="tui-accent">$</span> cargo deny check
+<span class="tui-badge-ok">advisories ok, bans ok, licenses ok, sources ok</span>
+
+<span class="tui-accent">$</span> ./scripts/net.sh 1
+<span class="tui-dim">Monitoring alacritty/velm network sockets for 60s (every 5s)...</span>
+<span class="tui-badge-ok">OK: 0 network connections observed for alacritty/velm.</span>
+
+<span class="tui-accent">$</span> term-ai doctor
+<span class="tui-dim">config: ~/.config/velm/config.toml (valid)</span>
+<span class="tui-dim">policy: http:// loopback only · TLS disabled at compile time</span>
+<span class="tui-badge-ok">✓ http://127.0.0.1:1234/v1 (LM Studio) — 2 models ready</span></pre>
+            <div class="tui-statusbar">
+              <span class="tui-badge-ok">● VERIFIED LOCAL-FIRST</span>
+              <span>Apache-2.0 · reproducible</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Download & Platforms -->
+    <section class="block" id="descargar">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">Descarga multiplataforma</p>
+          <h2>Instala y usa velm en Apple, Linux y Windows</h2>
+          <p>
+            Elige tu sistema operativo para obtener el instalador con verificación SHA-256, los binarios de GitHub Releases o la compilación reproducible con Cargo + Zig 0.16.0.
+          </p>
+        </div>
+
+        <div class="os-switcher" role="tablist" aria-label="Elegir plataforma de descarga">
+          <button class="os-btn" role="tab" id="dl-tab-macos" data-dl-os="macos" aria-selected="true">Apple · macOS</button>
+          <button class="os-btn" role="tab" id="dl-tab-linux" data-dl-os="linux" aria-selected="false">Linux</button>
+          <button class="os-btn" role="tab" id="dl-tab-windows" data-dl-os="windows" aria-selected="false">Windows</button>
+        </div>
+
+        <div class="platform-grid" id="platform-guide"></div>
+
+        <div class="matrix-wrap">
+          <table class="matrix" aria-label="Matriz de compatibilidad por sistema operativo">
+            <thead>
+              <tr>
+                <th>Componente</th>
+                <th>macOS (Apple Silicon)</th>
+                <th>macOS (Intel x86_64)</th>
+                <th>Linux (x86_64 / arm64)</th>
+                <th>Windows (x86_64)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>velm</code> multiplexor + OSC 133</td>
+                <td><span class="tag-ok">✓ Nativo</span></td>
+                <td><span class="tag-ok">✓ Nativo</span></td>
+                <td><span class="tag-ok">✓ Nativo (musl)</span></td>
+                <td><span class="tag-ok">✓ Nativo (ConPTY)</span></td>
+              </tr>
+              <tr>
+                <td><code>term-ai</code> (loopback sin TLS)</td>
+                <td><span class="tag-ok">✓ Nativo</span></td>
+                <td><span class="tag-ok">✓ Nativo</span></td>
+                <td><span class="tag-ok">✓ Nativo</span></td>
+                <td><span class="tag-ok">✓ Nativo</span></td>
+              </tr>
+              <tr>
+                <td><code>term-repos</code> (Git solo lectura)</td>
+                <td><span class="tag-ok">✓ Nativo</span></td>
+                <td><span class="tag-ok">✓ Nativo</span></td>
+                <td><span class="tag-ok">✓ Nativo</span></td>
+                <td><span class="tag-ok">✓ Nativo</span></td>
+              </tr>
+              <tr>
+                <td><code>term-claude</code> (sesiones locales)</td>
+                <td><span class="tag-ok">✓ Nativo</span></td>
+                <td><span class="tag-ok">✓ Nativo</span></td>
+                <td><span class="tag-ok">✓ Nativo</span></td>
+                <td><span class="tag-ok">✓ Nativo</span></td>
+              </tr>
+              <tr>
+                <td><code>term-sql</code> (Postgres local/dev)</td>
+                <td><span class="tag-ok">✓ Llavero macOS</span></td>
+                <td><span class="tag-ok">✓ Llavero macOS</span></td>
+                <td><span class="tag-note">Compila · Keyring en roadmap</span></td>
+                <td><span class="tag-note">Compila · Cred. Manager en roadmap</span></td>
+              </tr>
+              <tr>
+                <td>Integración <code>shell/term.zsh</code></td>
+                <td><span class="tag-ok">✓ zsh nativo</span></td>
+                <td><span class="tag-ok">✓ zsh nativo</span></td>
+                <td><span class="tag-ok">✓ zsh</span></td>
+                <td><span class="tag-note">WSL / Git Bash / OSC 133</span></td>
+              </tr>
+              <tr>
+                <td>Auditoría <code>scripts/net.sh</code> y <code>mem.sh</code></td>
+                <td><span class="tag-ok">✓ lsof + vmmap</span></td>
+                <td><span class="tag-ok">✓ lsof + vmmap</span></td>
+                <td><span class="tag-note">net.sh (lsof)</span></td>
+                <td><span class="tag-note">Monitor de recursos / Get-NetTCPConnection</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Interactive Config Generator + Keybindings -->
+    <section class="block" id="configurador">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">Configuración rápida</p>
+          <h2>Genera tu <code>~/.config/velm/config.toml</code></h2>
+          <p>
+            Activa únicamente los módulos que quieras usar. Todo lo demás permanece apagado (<code>enabled = false</code>) y <code>velm</code> ignora la sección <code>[term]</code> sin emitir avisos.
+          </p>
+        </div>
+
+        <div class="config-grid">
+          <div class="toggle-list">
+            <label class="toggle-item">
+              <div>
+                <strong>[term.ai] · Asistente local</strong>
+                <span>Autodetecta LM Studio, Ollama o llama.cpp en loopback</span>
+              </div>
+              <input class="switch" type="checkbox" id="cfg-ai" checked />
+            </label>
+            <label class="toggle-item">
+              <div>
+                <strong>[term.repos] · Panel Git</strong>
+                <span>Escaneo paralelo de solo lectura con GIT_OPTIONAL_LOCKS=0</span>
+              </div>
+              <input class="switch" type="checkbox" id="cfg-repos" checked />
+            </label>
+            <label class="toggle-item">
+              <div>
+                <strong>[term.sql] · Postgres local/dev</strong>
+                <span>Modo lectura por defecto, AST sqlparser y prod prohibido</span>
+              </div>
+              <input class="switch" type="checkbox" id="cfg-sql" checked />
+            </label>
+            <label class="toggle-item">
+              <div>
+                <strong>[term.claude] · Monitor Claude Code</strong>
+                <span>Tokens, sidechain, coste y alerta de contexto a 250k</span>
+              </div>
+              <input class="switch" type="checkbox" id="cfg-claude" checked />
+            </label>
+            <label class="toggle-item">
+              <div>
+                <strong>[[keys.command]] · Atajos integrados</strong>
+                <span>Incluye copy_last_output, explain_last y paneles rápidos</span>
+              </div>
+              <input class="switch" type="checkbox" id="cfg-keys" checked />
+            </label>
+          </div>
+
+          <div class="config-output">
+            <div class="config-output-head">
+              <span>~/.config/velm/config.toml</span>
+              <button class="copy-btn" id="copy-config-btn" type="button">Copiar TOML</button>
+            </div>
+            <pre><code id="generated-config"></code></pre>
+          </div>
+        </div>
+
+        <div class="keys-grid" aria-label="Atajos de teclado principales">
+          <div class="key-item"><span>Nueva pestaña</span><kbd>⌘T · prefix+c</kbd></div>
+          <div class="key-item"><span>Dividir vertical / horiz.</span><kbd>⌘D · ⌘⇧D</kbd></div>
+          <div class="key-item"><span>Zoom de panel</span><kbd>⌘⇧↵ · prefix+z</kbd></div>
+          <div class="key-item"><span>Sugerir comando (zsh)</span><kbd>Ctrl+G</kbd></div>
+          <div class="key-item"><span>Explicar última salida</span><kbd>⌘E · prefix+alt+e</kbd></div>
+          <div class="key-item"><span>Copiar última salida</span><kbd>prefix+y</kbd></div>
+          <div class="key-item"><span>Abrir term-repos</span><kbd>⌘⇧R · prefix+alt+r</kbd></div>
+          <div class="key-item"><span>Abrir term-sql</span><kbd>⌘⇧S · prefix+alt+s</kbd></div>
+          <div class="key-item"><span>Abrir term-claude</span><kbd>⌘⇧L · prefix+alt+l</kbd></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container footer-inner">
+      <div>
+        <strong>velm</strong> — Fork de <a href="https://github.com/herdrdev/herdr" target="_blank" rel="noopener" style="text-decoration:underline;">herdrdev/herdr</a> (v0.9.5) bajo licencia Apache-2.0.
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/Nokky21/velm" target="_blank" rel="noopener">Repositorio</a>
+        <a href="https://github.com/Nokky21/velm/releases" target="_blank" rel="noopener">Releases</a>
+        <a href="https://github.com/Nokky21/velm/blob/main/README.md" target="_blank" rel="noopener">README</a>
+        <a href="https://github.com/Nokky21/velm/blob/main/NOTICE" target="_blank" rel="noopener">NOTICE</a>
+        <a href="https://github.com/Nokky21/velm/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a>
+        <a href="https://github.com/Nokky21/velm/blob/main/LICENSE" target="_blank" rel="noopener">Apache-2.0</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      const HERO_COMMANDS = {
+        macos: {
+          prompt: '$',
+          cmd: 'curl -fsSL https://raw.githubusercontent.com/Nokky21/velm/main/scripts/install.sh | sh'
+        },
+        linux: {
+          prompt: '$',
+          cmd: 'curl -fsSL https://raw.githubusercontent.com/Nokky21/velm/main/scripts/install.sh | sh'
+        },
+        windows: {
+          prompt: 'PS>',
+          cmd: 'irm https://raw.githubusercontent.com/Nokky21/velm/main/scripts/install.ps1 | iex'
+        },
+        cargo: {
+          prompt: '$',
+          cmd: 'git clone https://github.com/Nokky21/velm && cd velm && cargo install --path . --locked'
+        }
+      };
+
+      let sqlWriteMode = false;
+
+      function copyText(text, btn, defaultLabel) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(() => flashCopied(btn, defaultLabel)).catch(() => fallbackCopy(text, btn, defaultLabel));
+        } else {
+          fallbackCopy(text, btn, defaultLabel);
+        }
+      }
+
+      function fallbackCopy(text, btn, defaultLabel) {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); } catch (_) {}
+        document.body.removeChild(ta);
+        flashCopied(btn, defaultLabel);
+      }
+
+      function flashCopied(btn, defaultLabel) {
+        btn.textContent = 'Copiado ✓';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = defaultLabel;
+          btn.classList.remove('copied');
+        }, 1600);
+      }
+
+      // Detect user OS for sensible default tabs
+      function detectOS() {
+        const ua = (navigator.userAgent || '').toLowerCase();
+        if (ua.includes('win')) return 'windows';
+        if (ua.includes('linux') && !ua.includes('android')) return 'linux';
+        return 'macos';
+      }
+
+      // Hero install switcher
+      const heroTabs = document.querySelectorAll('[data-hero-os]');
+      const heroPrompt = document.getElementById('hero-prompt');
+      const heroCmd = document.getElementById('hero-cmd');
+      const heroCopyBtn = document.getElementById('hero-copy-btn');
+
+      function setHeroOS(os) {
+        const entry = HERO_COMMANDS[os] || HERO_COMMANDS.macos;
+        heroTabs.forEach((b) => b.setAttribute('aria-selected', String(b.dataset.heroOs === os)));
+        heroPrompt.textContent = entry.prompt;
+        heroCmd.textContent = entry.cmd;
+      }
+
+      heroTabs.forEach((b) => b.addEventListener('click', () => setHeroOS(b.dataset.heroOs)));
+      heroCopyBtn.addEventListener('click', () => copyText(heroCmd.textContent, heroCopyBtn, 'Copiar'));
+
+      // Interactive Terminal Demo
+      const demoBody = document.getElementById('terminal-demo-body');
+      const demoTabs = document.querySelectorAll('[data-demo]');
+
+      function renderDemo(key) {
+        demoTabs.forEach((t) => t.setAttribute('aria-selected', String(t.dataset.demo === key)));
+
+        if (key === 'velm') {
+          demoBody.innerHTML = `
+            <div class="tui-split">
+              <div class="tui-sidebar">
+                <div class="tui-section-label">Workspaces</div>
+                <div class="tui-ws active"><span>● velm</span><span class="tui-dim">3</span></div>
+                <div class="tui-ws"><span>○ api-core</span><span class="tui-dim">2</span></div>
+                <div class="tui-ws"><span>○ infra</span><span class="tui-dim">1</span></div>
+                <div class="tui-section-label" style="margin-top:16px;">Sesión</div>
+                <div class="tui-dim">velm.sock</div>
+                <div class="tui-badge-ok">OSC 133 activo</div>
+              </div>
+              <div class="tui-pane-stack">
+                <div>
+                  <div><span class="tui-accent">$</span> cargo test -p term-config --locked</div>
+                  <div class="tui-dim">running 24 tests ...</div>
+                  <div class="tui-badge-ok">test result: ok. 24 passed; 0 failed; finished in 0.04s</div>
+                </div>
+                <hr class="tui-divider" />
+                <div>
+                  <div><span class="tui-accent">⌘E</span> <span style="color:var(--text);">term.explain_last</span> <span class="tui-dim">· última marca OSC 133 (exit 0)</span></div>
+                  <div class="tui-dim">├─ entrada recortada en fichero 0600 (--delete-input)</div>
+                  <div class="tui-dim">├─ servidor: http://127.0.0.1:1234/v1 (sin TLS)</div>
+                  <div class="tui-badge-ok">└─ 24 pruebas de validación [term] superadas sin errores.</div>
+                </div>
+              </div>
+            </div>
+            <div class="tui-statusbar">
+              <span class="tui-badge-ok">● PRIVACY LOCK · 0 conexiones externas</span>
+              <span>prefix Ctrl+B · OSC 133</span>
+            </div>
+          `;
+        } else if (key === 'ai') {
+          demoBody.innerHTML = `
+            <div>
+              <div class="tui-section-label">zsh · widget zle (Ctrl+G) + protección destructiva</div>
+              <div><span class="tui-accent">~/work/velm</span> <span class="tui-dim">main</span> % buscar archivos mayores de 100MB <kbd>^G</kbd></div>
+              <div class="tui-badge-ok" style="margin:6px 0 14px;">→ find . -type f -size +100M</div>
+
+              <div><span class="tui-accent">~/work/velm</span> <span class="tui-dim">main</span> % borrar carpeta build sin preguntar <kbd>^G</kbd></div>
+              <div class="tui-badge-warn" style="margin:6px 0 4px;"># rm -rf ./build</div>
+              <div class="tui-dim" style="margin-bottom:14px;">[exit 4] comando peligroso: quita el # si de verdad lo quieres</div>
+
+              <hr class="tui-divider" />
+              <div style="margin-top:10px;"><span class="tui-accent">$</span> term-ai doctor</div>
+              <div class="tui-dim">127.0.0.1:1234/v1  (LM Studio)  → <span class="tui-badge-ok">200 OK · 2 modelos</span></div>
+              <div class="tui-dim">127.0.0.1:11434/v1 (Ollama)     → sin respuesta (300ms)</div>
+              <div class="tui-dim">127.0.0.1:8080/v1  (llama.cpp)  → sin respuesta (300ms)</div>
+            </div>
+            <div class="tui-statusbar">
+              <span class="tui-accent">ureq sin TLS · solo loopback HTTP</span>
+              <span>suggest · explain · doctor · bench</span>
+            </div>
+          `;
+        } else if (key === 'repos') {
+          demoBody.innerHTML = `
+            <div>
+              <div class="tui-section-label">term-repos · solo lectura · GIT_OPTIONAL_LOCKS=0</div>
+              <table class="tui-table">
+                <thead>
+                  <tr><th>REPO</th><th>RAMA</th><th>CAMBIOS</th><th>REMOTO</th><th>ÚLTIMO COMMIT</th></tr>
+                </thead>
+                <tbody>
+                  <tr class="tui-row-selected">
+                    <td>velm</td>
+                    <td class="tui-accent">main</td>
+                    <td class="tui-badge-ok">limpio</td>
+                    <td class="tui-dim">origin/main</td>
+                    <td class="tui-dim">hace 4m</td>
+                  </tr>
+                  <tr>
+                    <td>api-payments</td>
+                    <td>feat/idempotency</td>
+                    <td class="tui-badge-warn">3M · 1?</td>
+                    <td class="tui-accent">↑2 ↓0</td>
+                    <td class="tui-dim">hace 1h</td>
+                  </tr>
+                  <tr>
+                    <td>web-portal</td>
+                    <td>main</td>
+                    <td class="tui-badge-danger">1 conflicto</td>
+                    <td class="tui-badge-warn">↑0 ↓3</td>
+                    <td class="tui-dim">ayer</td>
+                  </tr>
+                  <tr>
+                    <td>infra-k8s</td>
+                    <td class="tui-dim">detached @9f4a2</td>
+                    <td class="tui-badge-ok">limpio</td>
+                    <td class="tui-dim">sin upstream</td>
+                    <td class="tui-dim">hace 4d</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="tui-statusbar">
+              <span>j/k mover · d solo cambios · / buscar · o abrir panel · r consultar origin</span>
+              <span class="tui-badge-ok">0 red por defecto</span>
+            </div>
+          `;
+        } else if (key === 'sql') {
+          const modeHtml = sqlWriteMode
+            ? `
+              <div class="sql-mode-bar write">
+                <span>● ESCRITURA · dev-tunnel (dev) · tx expira en 54s · [c] COMMIT / [r] ROLLBACK</span>
+                <button class="mini-toggle" id="toggle-sql-mode" type="button">Cambiar a LECTURA (F2)</button>
+              </div>
+              <div class="tui-dim" style="margin-bottom:8px;">SQL&gt; UPDATE feature_flags SET enabled = true WHERE key = 'osc133';</div>
+              <div class="tui-badge-warn">AST verificado (sqlparser) · 1 sentencia con WHERE · esperando confirmación de dev-tunnel</div>
+              <div class="tui-dim" style="margin-top:8px;">Protecciones activas:</div>
+              <div class="tui-dim">• env = "prod" bloqueado en config.toml</div>
+              <div class="tui-dim">• UPDATE/DELETE sin WHERE exige escribir SIN WHERE</div>
+              <div class="tui-dim">• DROP/TRUNCATE exige escribir el nombre exacto de la conexión</div>
+            `
+            : `
+              <div class="sql-mode-bar read">
+                <span>● LECTURA · local-app (local) · default_transaction_read_only=on</span>
+                <button class="mini-toggle" id="toggle-sql-mode" type="button">Probar ESCRITURA (F2)</button>
+              </div>
+              <div class="tui-dim" style="margin-bottom:8px;">SQL&gt; SELECT id, env, status, updated_at FROM deployments LIMIT 3;</div>
+              <table class="tui-table">
+                <thead><tr><th>id</th><th>env</th><th>status</th><th>updated_at</th></tr></thead>
+                <tbody>
+                  <tr><td>412</td><td class="tui-badge-ok">local</td><td>ready</td><td class="tui-dim">2026-11-28 10:12</td></tr>
+                  <tr><td>411</td><td class="tui-badge-warn">dev</td><td>ready</td><td class="tui-dim">2026-11-27 21:44</td></tr>
+                  <tr><td>410</td><td class="tui-badge-warn">dev</td><td>rolled_back</td><td class="tui-dim">2026-11-27 18:05</td></tr>
+                </tbody>
+              </table>
+            `;
+          demoBody.innerHTML = `
+            <div>${modeHtml}</div>
+            <div class="tui-statusbar">
+              <span>F5 ejecutar · F2 modo · Tab foco · credenciales solo en Llavero</span>
+              <span class="tui-badge-ok">prod prohibido</span>
+            </div>
+          `;
+          const toggleBtn = document.getElementById('toggle-sql-mode');
+          if (toggleBtn) {
+            toggleBtn.addEventListener('click', () => {
+              sqlWriteMode = !sqlWriteMode;
+              renderDemo('sql');
+            });
+          }
+        } else if (key === 'claude') {
+          demoBody.innerHTML = `
+            <div>
+              <div class="tui-section-label">term-claude · solo lectura ~/.claude/projects · refresco 2s</div>
+              <table class="tui-table">
+                <thead>
+                  <tr><th>PROYECTO</th><th>CONTEXTO</th><th>TOKENS</th><th>SIDECHAIN</th><th>COSTE</th></tr>
+                </thead>
+                <tbody>
+                  <tr class="tui-row-selected">
+                    <td>velm <span class="tui-dim">(main)</span></td>
+                    <td class="tui-badge-danger">⚠ 264k</td>
+                    <td>1.42M</td>
+                    <td class="tui-dim">184k</td>
+                    <td class="tui-accent">$3.82</td>
+                  </tr>
+                  <tr>
+                    <td>api-payments</td>
+                    <td class="tui-badge-ok">91k</td>
+                    <td>412k</td>
+                    <td class="tui-dim">42k</td>
+                    <td>$1.14</td>
+                  </tr>
+                  <tr>
+                    <td>infra-k8s</td>
+                    <td class="tui-badge-ok">38k</td>
+                    <td>118k</td>
+                    <td class="tui-dim">0</td>
+                    <td>$0.31</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="tui-dim" style="margin-top:12px;">
+                Deduplicación estricta por message.id · costSource: cost-state · alerta &gt; 250k
+              </div>
+            </div>
+            <div class="tui-statusbar">
+              <span>c filtrar proyecto · / buscar · r refrescar · --json</span>
+              <span class="tui-badge-ok">0 tráfico de red</span>
+            </div>
+          `;
+        }
+      }
+
+      demoTabs.forEach((t) => t.addEventListener('click', () => renderDemo(t.dataset.demo)));
+      renderDemo('velm');
+
+      // Suite Modular Explorer
+      const TOOLS = {
+        ai: {
+          title: 'term-ai — Asistente local + OSC 133',
+          policy: 'Solo HTTP loopback · sin TLS',
+          desc: 'Conecta con LM Studio, Ollama o llama.cpp en 127.0.0.1 / ::1 para sugerir comandos en línea en zsh y explicar la salida del último comando capturado por OSC 133.',
+          bullets: [
+            '<strong>Autodetección en 300 ms:</strong> prueba <code>:1234/v1</code> (LM Studio), <code>:11434/v1</code> (Ollama) y <code>:8080/v1</code> (llama.cpp) y elige el primero con modelos activos.',
+            '<strong>Protección destructiva:</strong> nunca ejecuta nada; si detecta comandos destructivos, los devuelve comentados con <code># </code> y código de salida <code>4</code>.',
+            '<strong>Diagnóstico integrado:</strong> <code>term-ai doctor</code> valida configuración y modelos; <code>term-ai bench</code> mide aciertos y latencias sobre una batería TOML.'
+          ],
+          cmd: 'term-ai doctor\nterm-ai suggest --cwd . -- "listar puertos TCP escuchando"\nterm-ai bench',
+          doc: 'https://github.com/Nokky21/velm/blob/main/docs/asistente.md'
+        },
+        repos: {
+          title: 'term-repos — Panel Git multi-repositorio',
+          policy: 'Solo lectura · 0 red por defecto',
+          desc: 'Inspecciona en paralelo todos tus repositorios Git y worktrees en una única vista TUI o en formato JSON, sin competir nunca con el IDE por el bloqueo del índice.',
+          bullets: [
+            '<strong>Invocación segura:</strong> usa <code>git</code> del sistema con <code>GIT_OPTIONAL_LOCKS=0</code>, <code>GIT_TERMINAL_PROMPT=0</code> y <code>LC_ALL=C</code>.',
+            '<strong>Carga progresiva con timeout:</strong> ningún repositorio lento bloquea el panel; filtra al vuelo por cambios pendientes (<code>d</code>) o búsqueda (<code>/</code>).',
+            '<strong>Red solo bajo demanda:</strong> únicamente consulta el remoto si pulsas <code>r</code> (<code>git ls-remote --symref origin HEAD</code>).'
+          ],
+          cmd: 'term-repos\nterm-repos --json --root ~/Projects',
+          doc: 'https://github.com/Nokky21/velm/blob/main/docs/repos.md'
+        },
+        sql: {
+          title: 'term-sql — Cliente Postgres seguro',
+          policy: 'env = "prod" prohibido · AST sqlparser',
+          desc: 'Cliente TUI para consultar y depurar bases de datos Postgres en entornos local y dev con barreras explícitas contra errores humanos.',
+          bullets: [
+            '<strong>Lectura por defecto:</strong> abre cada sesión con <code>default_transaction_read_only=on</code>, <code>statement_timeout</code> y corte en streaming por <code>row_limit</code>.',
+            '<strong>Escritura controlada (<code>F2</code>):</strong> analiza la sentencia con <code>sqlparser</code>, exige <code>SIN WHERE</code> en <code>UPDATE</code>/<code>DELETE</code> sin filtro y el nombre de la conexión para <code>DROP</code>/<code>TRUNCATE</code> o <code>COMMIT</code> en <code>dev</code>.',
+            '<strong>Sin secretos en disco:</strong> las URLs nunca van a <code>config.toml</code>; en macOS se guardan en el Llavero del sistema mediante <code>term-sql conn add</code>.'
+          ],
+          cmd: 'term-sql conn add local-app\nterm-sql conn list\nterm-sql',
+          doc: 'https://github.com/Nokky21/velm/blob/main/docs/sql.md'
+        },
+        claude: {
+          title: 'term-claude — Monitor de sesiones de Claude Code',
+          policy: 'Solo lectura local · 0 red',
+          desc: 'Lee de forma incremental las transcripciones JSONL locales en ~/.claude/projects para controlar el tamaño de contexto, tokens de subagentes y coste estimado en tiempo real.',
+          bullets: [
+            '<strong>Deduplicación estricta:</strong> agrupa por <code>message.id</code> y maneja líneas incompletas o truncamientos sin inflar métricas.',
+            '<strong>Sidechain separado:</strong> distingue los tokens de la conversación principal de los subagentes (<code>sidechainTokens</code>).',
+            '<strong>Alerta de contexto y costes:</strong> resalta en rojo (<code>⚠</code>) sesiones que superan <code>context_alert_tokens</code> y prioriza <code>cost-state</code> o tu tabla de precios.'
+          ],
+          cmd: 'term-claude\nterm-claude --json --days 7',
+          doc: 'https://github.com/Nokky21/velm/blob/main/docs/claude.md'
+        }
+      };
+
+      const suiteItems = document.querySelectorAll('[data-tool]');
+      const suitePanel = document.getElementById('suite-panel');
+
+      function renderTool(key) {
+        const t = TOOLS[key];
+        suiteItems.forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tool === key)));
+        suitePanel.innerHTML = `
+          <div class="suite-panel-head">
+            <h3>${t.title}</h3>
+            <span class="suite-policy">${t.policy}</span>
+          </div>
+          <p>${t.desc}</p>
+          <ul class="bullet-list">${t.bullets.map((b) => `<li>${b}</li>`).join('')}</ul>
+          <div class="code-snippet">
+            <pre><code>${t.cmd}</code></pre>
+            <button class="copy-btn" type="button" data-copy-tool>Copiar</button>
+          </div>
+          <a class="doc-link" href="${t.doc}" target="_blank" rel="noopener">Leer documentación completa →</a>
+        `;
+        const btn = suitePanel.querySelector('[data-copy-tool]');
+        btn.addEventListener('click', () => copyText(t.cmd, btn, 'Copiar'));
+      }
+
+      suiteItems.forEach((b) => b.addEventListener('click', () => renderTool(b.dataset.tool)));
+      renderTool('ai');
+
+      // Platform Download Guide
+      const PLATFORMS = {
+        macos: {
+          heading: 'Apple · macOS (Apple Silicon y Intel)',
+          intro: 'Instalación recomendada con binarios precompilados verificados por SHA-256 o compilación local con Rust 1.96.1 y Zig 0.16.0. Incluye configuración óptima para Alacritty 0.17.0 y teclado español.',
+          steps: [
+            { label: '1. Instalador rápido (verifica SHA-256)', cmd: 'curl -fsSL https://raw.githubusercontent.com/Nokky21/velm/main/scripts/install.sh | sh' },
+            { label: '2. Alacritty 0.17.0 (DMG oficial) + configuración recomendada', cmd: 'mkdir -p ~/.config/alacritty && cp ~/.config/velm/share/alacritty.toml ~/.config/alacritty/alacritty.toml' },
+            { label: '3. Activar marcas OSC 133 y widget ^G en zsh', cmd: 'echo \'source "$HOME/.config/velm/share/term.zsh"\' >> ~/.zshrc && velm --default-config > ~/.config/velm/config.toml' },
+            { label: 'Alternativa: compilar desde fuente (Xcode CLT + Zig 0.16.0)', cmd: 'cargo install --path . --locked && cargo install --path crates/term-ai crates/term-repos crates/term-sql crates/term-claude --locked' }
+          ],
+          note: 'Nota macOS: el cask de Homebrew para Alacritty está deshabilitado por Gatekeeper desde 2026-09-01; descarga Alacritty 0.17.0 desde su DMG oficial.',
+          artifacts: [
+            { name: 'velm-macos-arm64.tar.gz', desc: 'Apple Silicon (M1 / M2 / M3 / M4) · + .sha256' },
+            { name: 'velm-macos-x86_64.tar.gz', desc: 'Mac Intel 64-bit · + .sha256' },
+            { name: 'SHA256SUMS.txt', desc: 'Sumas verificables de todos los binarios' }
+          ]
+        },
+        linux: {
+          heading: 'Linux (x86_64 y arm64 · binarios estáticos musl)',
+          intro: 'Los binarios de release se compilan con musl para funcionar en Ubuntu, Debian, Fedora, Arch o NixOS sin conflictos de glibc. Compatible con Alacritty, Ghostty, WezTerm y Kitty.',
+          steps: [
+            { label: '1. Instalador rápido (detecta x86_64 o arm64 y verifica SHA-256)', cmd: 'curl -fsSL https://raw.githubusercontent.com/Nokky21/velm/main/scripts/install.sh | sh' },
+            { label: '2. Añadir ~/.local/bin al PATH y generar configuración', cmd: 'export PATH="$HOME/.local/bin:$PATH"\nmkdir -p ~/.config/velm && velm --default-config > ~/.config/velm/config.toml' },
+            { label: '3. Autocompletado de shell (zsh / bash / fish)', cmd: 'velm completion zsh > ~/.zfunc/_velm   # o: velm completion bash' },
+            { label: 'Alternativa: compilar desde fuente (Rust 1.96.1 + Zig 0.16.0)', cmd: 'cargo install --path . --locked && cargo install --path crates/term-ai crates/term-repos crates/term-sql crates/term-claude --locked' }
+          ],
+          note: 'Nota Linux: velm, term-ai, term-repos, term-claude y scripts/net.sh (lsof) funcionan de forma nativa. El backend de Llavero nativo (Secret Service) para term-sql está en el roadmap.',
+          artifacts: [
+            { name: 'velm-linux-x86_64.tar.gz', desc: 'Linux x86_64 estático (musl) · + .sha256' },
+            { name: 'velm-linux-arm64.tar.gz', desc: 'Linux ARM64 estático (musl) · + .sha256' },
+            { name: 'SHA256SUMS.txt', desc: 'Sumas verificables de todos los binarios' }
+          ]
+        },
+        windows: {
+          heading: 'Windows 10 / 11 (x86_64 · ConPTY nativo)',
+          intro: 'Corre sobre Windows Terminal, Alacritty o WezTerm con soporte nativo de ConPTY y sin WSL obligatorio. El instalador de PowerShell verifica el hash SHA-256 y añade velm al PATH de usuario.',
+          steps: [
+            { label: '1. Instalador PowerShell (verifica SHA-256)', cmd: 'irm https://raw.githubusercontent.com/Nokky21/velm/main/scripts/install.ps1 | iex' },
+            { label: '2. Generar configuración base en %APPDATA%\\velm', cmd: 'New-Item -ItemType Directory -Force "$env:APPDATA\\velm" | Out-Null\nvelm --default-config | Set-Content -Encoding utf8 "$env:APPDATA\\velm\\config.toml"' },
+            { label: '3. Autocompletado en PowerShell y arranque', cmd: 'velm completion powershell | Out-String | Invoke-Expression\nvelm' },
+            { label: 'Alternativa: compilar desde fuente (MSVC + Zig 0.16.0)', cmd: 'cargo install --path . --locked; cargo install --path crates/term-ai --locked; cargo install --path crates/term-repos --locked; cargo install --path crates/term-claude --locked' }
+          ],
+          note: 'Nota Windows: velm, term-ai, term-repos y term-claude funcionan de forma nativa. La integración con Windows Credential Manager para term-sql está en el roadmap.',
+          artifacts: [
+            { name: 'velm-windows-x86_64.zip', desc: 'Windows 64-bit (velm.exe + term-*.exe) · + .sha256' },
+            { name: 'SHA256SUMS.txt', desc: 'Sumas verificables de todos los binarios' }
+          ]
+        }
+      };
+
+      const dlBtns = document.querySelectorAll('[data-dl-os]');
+      const platformGuide = document.getElementById('platform-guide');
+
+      function renderPlatform(os) {
+        const p = PLATFORMS[os] || PLATFORMS.macos;
+        dlBtns.forEach((b) => b.setAttribute('aria-selected', String(b.dataset.dlOs === os)));
+
+        const stepsHtml = p.steps.map((s, idx) => `
+          <div class="step-label">${s.label}</div>
+          <div class="code-snippet">
+            <pre><code>${s.cmd}</code></pre>
+            <button class="copy-btn" type="button" data-copy-step="${idx}">Copiar</button>
+          </div>
+        `).join('');
+
+        const artifactsHtml = p.artifacts.map((a) => `
+          <a class="artifact-link" href="https://github.com/Nokky21/velm/releases" target="_blank" rel="noopener">
+            <div>
+              <strong>${a.name}</strong>
+              <span>${a.desc}</span>
+            </div>
+            <span class="artifact-arrow">↓</span>
+          </a>
+        `).join('');
+
+        platformGuide.innerHTML = `
+          <div class="platform-card">
+            <h3>${p.heading}</h3>
+            <p>${p.intro}</p>
+            ${stepsHtml}
+            <p style="margin:12px 0 0; font-size:12.5px; color:var(--text-muted);">${p.note}</p>
+          </div>
+          <div class="platform-card">
+            <h3>Descargas directas (GitHub Releases)</h3>
+            <p>Todos los archivos incluyen los 5 binarios (<code>velm</code> y <code>term-*</code>), <code>shell/term.zsh</code>, <code>extras/alacritty.toml</code>, <code>LICENSE</code> y <code>NOTICE</code>.</p>
+            <div class="artifact-list">${artifactsHtml}</div>
+            <div class="step-label" style="margin-top:20px;">Verificar integridad manualmente</div>
+            <div class="code-snippet" style="margin-bottom:0;">
+              <pre><code>${os === 'windows' ? 'Get-FileHash .\\velm-*-windows-x86_64.zip -Algorithm SHA256' : 'shasum -a 256 -c velm-*.sha256'}</code></pre>
+            </div>
+          </div>
+        `;
+
+        platformGuide.querySelectorAll('[data-copy-step]').forEach((btn) => {
+          const i = Number(btn.dataset.copyStep);
+          btn.addEventListener('click', () => copyText(p.steps[i].cmd, btn, 'Copiar'));
+        });
+      }
+
+      dlBtns.forEach((b) => b.addEventListener('click', () => renderPlatform(b.dataset.dlOs)));
+
+      // Sync both OS selectors to detected OS initially
+      const initialOS = detectOS();
+      setHeroOS(initialOS);
+      renderPlatform(initialOS);
+
+      // Interactive Config Builder
+      const cfgAi = document.getElementById('cfg-ai');
+      const cfgRepos = document.getElementById('cfg-repos');
+      const cfgSql = document.getElementById('cfg-sql');
+      const cfgClaude = document.getElementById('cfg-claude');
+      const cfgKeys = document.getElementById('cfg-keys');
+      const generatedConfig = document.getElementById('generated-config');
+      const copyConfigBtn = document.getElementById('copy-config-btn');
+
+      function updateConfig() {
+        const lines = ['# ~/.config/velm/config.toml (sección [term] y comandos)'];
+
+        if (cfgKeys.checked) {
+          lines.push(
+            '',
+            '[[keys.command]]',
+            'key = "prefix+y"',
+            'command = "term.copy_last_output"'
+          );
+          if (cfgAi.checked) {
+            lines.push(
+              '',
+              '[[keys.command]]',
+              'key = "prefix+alt+e"',
+              'command = "term.explain_last"'
+            );
+          }
+          if (cfgRepos.checked) {
+            lines.push(
+              '',
+              '[[keys.command]]',
+              'key = "prefix+alt+r"',
+              'type = "pane"',
+              'command = "term-repos"'
+            );
+          }
+          if (cfgSql.checked) {
+            lines.push(
+              '',
+              '[[keys.command]]',
+              'key = "prefix+alt+s"',
+              'type = "pane"',
+              'command = "term-sql"'
+            );
+          }
+          if (cfgClaude.checked) {
+            lines.push(
+              '',
+              '[[keys.command]]',
+              'key = "prefix+alt+l"',
+              'type = "pane"',
+              'command = "term-claude"'
+            );
+          }
+        }
+
+        if (cfgAi.checked) {
+          lines.push(
+            '',
+            '[term.ai]',
+            'enabled = true',
+            'server = "auto"   # LM Studio :1234 -> Ollama :11434 -> llama.cpp :8080',
+            'zsh_key = "^G"'
+          );
+        }
+        if (cfgRepos.checked) {
+          lines.push(
+            '',
+            '[term.repos]',
+            'enabled = true',
+            'roots = ["~/Projects"]',
+            'max_depth = 3',
+            'include_worktrees = true'
+          );
+        }
+        if (cfgSql.checked) {
+          lines.push(
+            '',
+            '[term.sql]',
+            'enabled = true',
+            'row_limit = 500',
+            '',
+            '[[term.sql.connections]]',
+            'name = "local-app"',
+            'env = "local"   # solo "local" o "dev" ("prod" está prohibido)'
+          );
+        }
+        if (cfgClaude.checked) {
+          lines.push(
+            '',
+            '[term.claude]',
+            'enabled = true',
+            'days = 7',
+            'context_alert_tokens = 250000'
+          );
+        }
+
+        if (!cfgAi.checked && !cfgRepos.checked && !cfgSql.checked && !cfgClaude.checked && !cfgKeys.checked) {
+          lines.push('', '# Todas las herramientas term-* están desactivadas (enabled = false).');
+        }
+
+        generatedConfig.textContent = lines.join('\n');
+      }
+
+      [cfgAi, cfgRepos, cfgSql, cfgClaude, cfgKeys].forEach((el) => el.addEventListener('change', updateConfig));
+      copyConfigBtn.addEventListener('click', () => copyText(generatedConfig.textContent, copyConfigBtn, 'Copiar TOML'));
+      updateConfig();
+    })();
+  </script>
+</body>
+</html>

@@ -121,7 +121,7 @@ run_scenario() {
       ;;
     E4)
       local pane_id
-      pane_id=$(XDG_CONFIG_HOME="$tmp_root/config" "$velm_bin" --session "$session_name" pane split --direction right >/dev/null 2>&1 || true)
+      pane_id=$(XDG_CONFIG_HOME="$tmp_root/config" "$velm_bin" --session "$session_name" pane split --direction right --json 2>/dev/null | awk -F'"' '/"pane_id"/{print $4; exit}' || true)
       sleep 2
       if [[ -n "$pane_id" ]]; then
         XDG_CONFIG_HOME="$tmp_root/config" "$velm_bin" --session "$session_name" pane close "$pane_id" >/dev/null 2>&1 || true

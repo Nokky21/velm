@@ -21,6 +21,73 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  site-and-docs:
+    name: landing, scripts & docs checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+
+      - name: Validate shell scripts
+        run: |
+          sh -n scripts/install.sh
+          bash -n scripts/mem.sh
+          bash -n scripts/net.sh
+          bash -n scripts/test_term_zsh.sh
+
+      - name: Validate SVG assets, README links, and landing page
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          import re
+          import sys
+          import xml.etree.ElementTree as ET
+
+          errors = []
+
+          for svg in ["assets/velm-banner.svg", "site/favicon.svg"]:
+              p = pathlib.Path(svg)
+              if not p.exists():
+                  errors.append(f"missing SVG asset: {svg}")
+              else:
+                  try:
+                      ET.parse(p)
+                  except ET.ParseError as exc:
+                      errors.append(f"invalid SVG XML in {svg}: {exc}")
+
+          index_html = pathlib.Path("site/index.html")
+          if not index_html.exists() or index_html.stat().st_size < 1000:
+              errors.append("site/index.html is missing or unexpectedly small")
+          else:
+              html = re.sub(r"<script\b[^>]*>.*?</script>", "", index_html.read_text(encoding="utf-8"), flags=re.S)
+              for attr in re.findall(r'(?:src|href)="([^"]+)"', html):
+                  if attr.startswith(("http://", "https://", "#", "mailto:", "data:")):
+                      continue
+                  target = (index_html.parent / attr.split("#")[0]).resolve()
+                  if not target.exists():
+                      errors.append(f"site/index.html references missing file: {attr}")
+
+          for md_path in [pathlib.Path("README.md"), *sorted(pathlib.Path("docs").glob("*.md"))]:
+              text = md_path.read_text(encoding="utf-8")
+              for md_link, img_src in re.findall(r'\[[^\]]+\]\(([^)]+)\)|src="([^"]+)"', text):
+                  target = md_link or img_src
+                  if target.startswith(("http://", "https://", "#", "mailto:")):
+                      continue
+                  resolved = (md_path.parent / target.split("#")[0]).resolve()
+                  if not resolved.exists():
+                      errors.append(f"{md_path}: broken relative link -> {target}")
+
+          if errors:
+              print("Site/docs validation failed:", file=sys.stderr)
+              for err in errors:
+                  print(f"  {err}", file=sys.stderr)
+              sys.exit(1)
+          print("Site, SVG, script, and documentation checks passed.")
+          PY
+
   velm-checks:
     name: velm checks (macOS arm64)
     runs-on: macos-latest
@@ -66,6 +133,9 @@ jobs:
 
       - name: Run tests with cargo-nextest
         run: cargo nextest run --workspace --locked -E 'not binary(live_handoff)' --status-level fail --final-status-level fail --failure-output final --success-output never
+
+      - name: Run zsh OSC 133 and term-ai widget tests
+        run: ./scripts/test_term_zsh.sh
 
       - name: Run clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
@@ -180,6 +250,115 @@ jobs:
               sys.exit(1)
           print("Static privacy check passed.")
           PY
+
+      - name: Save Zig build cache
+        if: github.event_name == 'push'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .zig-cache
+          key: term-ci-zig-v1-${{ runner.os }}-${{ runner.arch }}-0.16.0-${{ github.sha }}
+
+  velm-linux:
+    name: velm checks (Linux x86_64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # v1
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN_VERSION }}
+          components: clippy
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+        with:
+          tool: cargo-nextest
+
+      - name: Install Zig 0.16.0
+        uses: vercel-labs/setup-zig@83c1594f26b86da8a9a8ddd9b5ee5f3af0f96943 # v1.0.2
+        with:
+          version: 0.16.0
+
+      - name: Restore Zig build cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .zig-cache
+          key: term-ci-zig-v1-${{ runner.os }}-${{ runner.arch }}-0.16.0-${{ github.sha }}
+          restore-keys: |
+            term-ci-zig-v1-${{ runner.os }}-${{ runner.arch }}-0.16.0-
+
+      - name: Restore cargo cache
+        uses: Swatinem/rust-cache@f0d9c3887740aee45f6153b24b3a6b815192ec16 # v2
+        with:
+          cache-bin: false
+          key: term-ci-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Build workspace
+        run: cargo build --workspace --locked
+
+      - name: Run tests with cargo-nextest
+        run: cargo nextest run --workspace --locked -E 'not binary(live_handoff)' --status-level fail --final-status-level fail --failure-output final --success-output never
+
+      - name: Run clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Save Zig build cache
+        if: github.event_name == 'push'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .zig-cache
+          key: term-ci-zig-v1-${{ runner.os }}-${{ runner.arch }}-0.16.0-${{ github.sha }}
+
+  velm-windows:
+    name: velm build & term-* tests (Windows x86_64)
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # v1
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN_VERSION }}
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+        with:
+          tool: cargo-nextest
+
+      - name: Install Zig 0.16.0
+        uses: vercel-labs/setup-zig@83c1594f26b86da8a9a8ddd9b5ee5f3af0f96943 # v1.0.2
+        with:
+          version: 0.16.0
+
+      - name: Restore Zig build cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .zig-cache
+          key: term-ci-zig-v1-${{ runner.os }}-${{ runner.arch }}-0.16.0-${{ github.sha }}
+          restore-keys: |
+            term-ci-zig-v1-${{ runner.os }}-${{ runner.arch }}-0.16.0-
+
+      - name: Restore cargo cache
+        uses: Swatinem/rust-cache@f0d9c3887740aee45f6153b24b3a6b815192ec16 # v2
+        with:
+          cache-bin: false
+          key: term-ci-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Build workspace
+        run: cargo build --workspace --locked
+
+      - name: Run term-* tests on Windows
+        run: cargo nextest run -p term-config -p term-ai -p term-repos -p term-sql -p term-claude --locked --status-level fail --final-status-level fail --failure-output final --success-output never
 
       - name: Save Zig build cache
         if: github.event_name == 'push'

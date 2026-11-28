@@ -29,16 +29,16 @@ confidence-threshold = 0.8
 multiple-versions = "allow"
 wildcards = "allow"
 deny = [
-    { crate = "reqwest", wrappers = ["term-ai", "term-sql"] },
-    { crate = "ureq", wrappers = ["term-ai", "term-sql"] },
-    { crate = "hyper", wrappers = ["term-ai", "term-sql"] },
-    { crate = "isahc", wrappers = ["term-ai", "term-sql"] },
-    { crate = "curl", wrappers = ["term-ai", "term-sql"] },
-    { crate = "surf", wrappers = ["term-ai", "term-sql"] },
-    { crate = "attohttpc", wrappers = ["term-ai", "term-sql"] },
-    { crate = "rustls", wrappers = ["term-ai", "term-sql"] },
-    { crate = "native-tls", wrappers = ["term-ai", "term-sql"] },
-    { crate = "openssl", wrappers = ["term-ai", "term-sql"] },
+    { crate = "reqwest" },
+    { crate = "ureq", wrappers = ["term-ai"] },
+    { crate = "hyper" },
+    { crate = "isahc" },
+    { crate = "curl" },
+    { crate = "surf" },
+    { crate = "attohttpc" },
+    { crate = "rustls" },
+    { crate = "native-tls" },
+    { crate = "openssl" },
 ]
 
 [sources]
