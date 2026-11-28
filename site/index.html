@@ -5,7 +5,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>velm — Multiplexor de terminal en Rust · Local, rápido y verificable</title>
   <meta name="description" content="velm es un multiplexor de terminal en Rust para macOS, Linux y Windows con marcas OSC 133, cero telemetría verificable y herramientas locales modulares (term-ai, term-repos, term-sql, term-claude)." />
-  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <meta name="theme-color" content="#0a0b0d" />
+  <link rel="canonical" href="https://nokky21.github.io/velm/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:locale" content="es_ES" />
+  <meta property="og:site_name" content="velm" />
+  <meta property="og:url" content="https://nokky21.github.io/velm/" />
+  <meta property="og:title" content="velm — Tu terminal, 100% local." />
+  <meta property="og:description" content="Multiplexor de terminal en Rust para macOS, Linux y Windows con marcas OSC 133, cero telemetría verificable y suite modular local (term-ai, term-repos, term-sql, term-claude)." />
+  <meta property="og:image" content="https://nokky21.github.io/velm/og-card.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="velm — Multiplexor de terminal en Rust local, rápido y verificable" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="velm — Tu terminal, 100% local." />
+  <meta name="twitter:description" content="Multiplexor en Rust con marcas OSC 133, cero telemetría verificable y suite local para macOS, Linux y Windows." />
+  <meta name="twitter:image" content="https://nokky21.github.io/velm/og-card.png" />
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -165,8 +181,8 @@
 
     .hero-grid {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1.12fr);
-      gap: 44px;
+      grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr);
+      gap: 40px;
       align-items: center;
     }
 
@@ -181,7 +197,7 @@
 
     h1 {
       margin: 0 0 18px;
-      font-size: clamp(34px, 4.4vw, 52px);
+      font-size: clamp(32px, 4.2vw, 50px);
       line-height: 1.07;
       letter-spacing: -0.035em;
       font-weight: 700;
@@ -212,6 +228,7 @@
       border-radius: var(--radius-md);
       overflow: hidden;
       margin-bottom: 18px;
+      max-width: 100%;
     }
 
     .install-tabs {
@@ -227,6 +244,7 @@
       display: flex;
       gap: 2px;
       overflow-x: auto;
+      min-width: 0;
     }
 
     .tab-btn {
@@ -252,14 +270,17 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
-      padding: 14px 16px;
+      gap: 10px;
+      padding: 13px 14px;
+      min-width: 0;
     }
 
     .install-cmd {
       margin: 0;
+      flex: 1 1 auto;
+      min-width: 0;
       font-family: var(--font-mono);
-      font-size: 12.5px;
+      font-size: 11.8px;
       color: var(--text);
       overflow-x: auto;
       white-space: nowrap;
@@ -341,6 +362,7 @@
       display: flex;
       gap: 4px;
       overflow-x: auto;
+      min-width: 0;
     }
 
     .term-tab {
@@ -351,6 +373,8 @@
       font-family: var(--font-mono);
       font-size: 11.5px;
       color: var(--text-muted);
+      white-space: nowrap;
+      flex-shrink: 0;
       transition: all 0.15s ease;
     }
     .term-tab:hover { color: var(--text-secondary); background: rgba(255,255,255,0.03); }
@@ -1008,15 +1032,17 @@
       .suite-layout,
       .privacy-grid,
       .platform-grid,
-      .config-grid {
-        grid-template-columns: 1fr;
-      }
+      .config-grid,
       .steps-grid,
-      .keys-grid {
-        grid-template-columns: 1fr;
+      .keys-grid,
+      .tui-split {
+        grid-template-columns: minmax(0, 1fr);
       }
+      .hero { padding: 48px 0 44px; }
+      .container { padding: 0 18px; }
       .nav-links { display: none; }
-      .tui-split { grid-template-columns: 1fr; }
+      .tui-chrome { flex-wrap: wrap; gap: 10px; }
+      .tui-tabs { max-width: 100%; overflow-x: auto; }
       .tui-sidebar { border-right: none; border-bottom: 1px solid var(--border); padding: 0 0 10px; }
     }
   </style>
@@ -1064,7 +1090,7 @@
               </div>
             </div>
             <div class="install-cmd-row">
-              <pre class="install-cmd"><span class="prompt" id="hero-prompt">$</span><code id="hero-cmd">curl -fsSL https://raw.githubusercontent.com/Nokky21/velm/main/scripts/install.sh | sh</code></pre>
+              <pre class="install-cmd"><span class="prompt" id="hero-prompt">$</span><code id="hero-cmd">curl -fsSL https://nokky21.github.io/velm/install.sh | sh</code></pre>
               <button class="copy-btn" id="hero-copy-btn" type="button">Copiar</button>
             </div>
           </div>
@@ -1411,15 +1437,15 @@
       const HERO_COMMANDS = {
         macos: {
           prompt: '$',
-          cmd: 'curl -fsSL https://raw.githubusercontent.com/Nokky21/velm/main/scripts/install.sh | sh'
+          cmd: 'curl -fsSL https://nokky21.github.io/velm/install.sh | sh'
         },
         linux: {
           prompt: '$',
-          cmd: 'curl -fsSL https://raw.githubusercontent.com/Nokky21/velm/main/scripts/install.sh | sh'
+          cmd: 'curl -fsSL https://nokky21.github.io/velm/install.sh | sh'
         },
         windows: {
           prompt: 'PS>',
-          cmd: 'irm https://raw.githubusercontent.com/Nokky21/velm/main/scripts/install.ps1 | iex'
+          cmd: 'irm https://nokky21.github.io/velm/install.ps1 | iex'
         },
         cargo: {
           prompt: '$',
@@ -1762,7 +1788,7 @@
           heading: 'Apple · macOS (Apple Silicon y Intel)',
           intro: 'Instalación recomendada con binarios precompilados verificados por SHA-256 o compilación local con Rust 1.96.1 y Zig 0.16.0. Incluye configuración óptima para Alacritty 0.17.0 y teclado español.',
           steps: [
-            { label: '1. Instalador rápido (verifica SHA-256)', cmd: 'curl -fsSL https://raw.githubusercontent.com/Nokky21/velm/main/scripts/install.sh | sh' },
+            { label: '1. Instalador rápido (verifica SHA-256)', cmd: 'curl -fsSL https://nokky21.github.io/velm/install.sh | sh' },
             { label: '2. Alacritty 0.17.0 (DMG oficial) + configuración recomendada', cmd: 'mkdir -p ~/.config/alacritty && cp ~/.config/velm/share/alacritty.toml ~/.config/alacritty/alacritty.toml' },
             { label: '3. Activar marcas OSC 133 y widget ^G en zsh', cmd: 'echo \'source "$HOME/.config/velm/share/term.zsh"\' >> ~/.zshrc && velm --default-config > ~/.config/velm/config.toml' },
             { label: 'Alternativa: compilar desde fuente (Xcode CLT + Zig 0.16.0)', cmd: 'cargo install --path . --locked && cargo install --path crates/term-ai crates/term-repos crates/term-sql crates/term-claude --locked' }
@@ -1778,7 +1804,7 @@
           heading: 'Linux (x86_64 y arm64 · binarios estáticos musl)',
           intro: 'Los binarios de release se compilan con musl para funcionar en Ubuntu, Debian, Fedora, Arch o NixOS sin conflictos de glibc. Compatible con Alacritty, Ghostty, WezTerm y Kitty.',
           steps: [
-            { label: '1. Instalador rápido (detecta x86_64 o arm64 y verifica SHA-256)', cmd: 'curl -fsSL https://raw.githubusercontent.com/Nokky21/velm/main/scripts/install.sh | sh' },
+            { label: '1. Instalador rápido (detecta x86_64 o arm64 y verifica SHA-256)', cmd: 'curl -fsSL https://nokky21.github.io/velm/install.sh | sh' },
             { label: '2. Añadir ~/.local/bin al PATH y generar configuración', cmd: 'export PATH="$HOME/.local/bin:$PATH"\nmkdir -p ~/.config/velm && velm --default-config > ~/.config/velm/config.toml' },
             { label: '3. Autocompletado de shell (zsh / bash / fish)', cmd: 'velm completion zsh > ~/.zfunc/_velm   # o: velm completion bash' },
             { label: 'Alternativa: compilar desde fuente (Rust 1.96.1 + Zig 0.16.0)', cmd: 'cargo install --path . --locked && cargo install --path crates/term-ai crates/term-repos crates/term-sql crates/term-claude --locked' }
@@ -1794,7 +1820,7 @@
           heading: 'Windows 10 / 11 (x86_64 · ConPTY nativo)',
           intro: 'Corre sobre Windows Terminal, Alacritty o WezTerm con soporte nativo de ConPTY y sin WSL obligatorio. El instalador de PowerShell verifica el hash SHA-256 y añade velm al PATH de usuario.',
           steps: [
-            { label: '1. Instalador PowerShell (verifica SHA-256)', cmd: 'irm https://raw.githubusercontent.com/Nokky21/velm/main/scripts/install.ps1 | iex' },
+            { label: '1. Instalador PowerShell (verifica SHA-256)', cmd: 'irm https://nokky21.github.io/velm/install.ps1 | iex' },
             { label: '2. Generar configuración base en %APPDATA%\\velm', cmd: 'New-Item -ItemType Directory -Force "$env:APPDATA\\velm" | Out-Null\nvelm --default-config | Set-Content -Encoding utf8 "$env:APPDATA\\velm\\config.toml"' },
             { label: '3. Autocompletado en PowerShell y arranque', cmd: 'velm completion powershell | Out-String | Invoke-Expression\nvelm' },
             { label: 'Alternativa: compilar desde fuente (MSVC + Zig 0.16.0)', cmd: 'cargo install --path . --locked; cargo install --path crates/term-ai --locked; cargo install --path crates/term-repos --locked; cargo install --path crates/term-claude --locked' }

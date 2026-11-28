@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - "site/**"
+      - "scripts/install.sh"
+      - "scripts/install.ps1"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -30,15 +32,22 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Assemble GitHub Pages bundle
+        run: |
+          rm -rf _pages_dist
+          mkdir -p _pages_dist
+          cp -R site/. _pages_dist/
+          cp scripts/install.sh _pages_dist/install.sh
+          cp scripts/install.ps1 _pages_dist/install.ps1
+          touch _pages_dist/.nojekyll
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: _pages_dist
 
       - name: Deploy to GitHub Pages
         id: deployment

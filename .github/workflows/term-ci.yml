@@ -58,17 +58,30 @@ jobs:
                   except ET.ParseError as exc:
                       errors.append(f"invalid SVG XML in {svg}: {exc}")
 
-          index_html = pathlib.Path("site/index.html")
-          if not index_html.exists() or index_html.stat().st_size < 1000:
-              errors.append("site/index.html is missing or unexpectedly small")
-          else:
-              html = re.sub(r"<script\b[^>]*>.*?</script>", "", index_html.read_text(encoding="utf-8"), flags=re.S)
+          for required in [
+              "site/.nojekyll",
+              "site/404.html",
+              "site/og-card.png",
+              "site/robots.txt",
+              "site/sitemap.xml",
+          ]:
+              if not pathlib.Path(required).exists():
+                  errors.append(f"missing GitHub Pages asset: {required}")
+
+          for html_path in [pathlib.Path("site/index.html"), pathlib.Path("site/404.html")]:
+              if not html_path.exists() or html_path.stat().st_size < 500:
+                  errors.append(f"{html_path} is missing or unexpectedly small")
+                  continue
+              html = re.sub(r"<script\b[^>]*>.*?</script>", "", html_path.read_text(encoding="utf-8"), flags=re.S)
               for attr in re.findall(r'(?:src|href)="([^"]+)"', html):
                   if attr.startswith(("http://", "https://", "#", "mailto:", "data:")):
                       continue
-                  target = (index_html.parent / attr.split("#")[0]).resolve()
+                  if attr.startswith("/"):
+                      errors.append(f"{html_path} uses root-absolute path {attr!r} (breaks GitHub Project Pages /velm/ subpath)")
+                      continue
+                  target = (html_path.parent / attr.split("#")[0]).resolve()
                   if not target.exists():
-                      errors.append(f"site/index.html references missing file: {attr}")
+                      errors.append(f"{html_path} references missing file: {attr}")
 
           for md_path in [pathlib.Path("README.md"), *sorted(pathlib.Path("docs").glob("*.md"))]:
               text = md_path.read_text(encoding="utf-8")
