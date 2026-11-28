@@ -135,7 +135,7 @@ jobs:
         run: cargo nextest run --workspace --locked -E 'not binary(live_handoff)' --status-level fail --final-status-level fail --failure-output final --success-output never
 
       - name: Run zsh OSC 133 and term-ai widget tests
-        run: ./scripts/test_term_zsh.sh
+        run: bash scripts/test_term_zsh.sh
 
       - name: Run clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
@@ -316,7 +316,7 @@ jobs:
 
   velm-windows:
     name: velm build & term-* tests (Windows x86_64)
-    runs-on: windows-latest
+    runs-on: windows-2022
     timeout-minutes: 25
     steps:
       - name: Checkout
