@@ -32,6 +32,7 @@ fi
 
 # 2-4. Interactive PTY test via python3
 python3 - "$TERM_ZSH" <<'PY'
+import fcntl
 import os
 import pty
 import re
@@ -60,6 +61,15 @@ preexec_functions=(user_preexec)
 
 source {term_zsh!r}
 source {term_zsh!r}
+
+_check_hooks() {{
+  local rest="$PS1" bmark=$'\\e]133;B\\a' bmarks=0
+  while [[ "$rest" == *"$bmark"* ]]; do
+    bmarks=$(( bmarks + 1 ))
+    rest="${{rest#*"$bmark"}}"
+  done
+  print -r -- "HOOKS=$_user_precmd_ran:$_user_preexec_ran:BMARKS=$bmarks"
+}}
 """)
 
     master, slave = pty.openpty()
@@ -71,23 +81,27 @@ source {term_zsh!r}
     env["ZDOTDIR"] = zdotdir
     env["TERM"] = "xterm-256color"
 
+    def setup_ctty() -> None:
+        os.setsid()
+        fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+
     proc = subprocess.Popen(
-        ["zsh", "-f", "-i"],
+        ["zsh", "-d", "-i"],
         stdin=slave,
         stdout=slave,
         stderr=slave,
         env=env,
         close_fds=True,
-        preexec_fn=os.setsid,
+        preexec_fn=setup_ctty,
     )
     os.close(slave)
 
     buf = bytearray()
 
-    def read_until(pattern: bytes, timeout: float = 5.0) -> None:
+    def read_until(pattern: bytes, timeout: float = 5.0, since: int = 0) -> None:
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            if re.search(pattern, buf):
+            if re.search(pattern, buf[since:], re.DOTALL):
                 return
             r, _, _ = select.select([master], [], [], 0.1)
             if r:
@@ -95,7 +109,7 @@ source {term_zsh!r}
                 if not chunk:
                     break
                 buf.extend(chunk)
-        raise TimeoutError(f"timed out waiting for {pattern!r} in {bytes(buf)!r}")
+        raise TimeoutError(f"timed out waiting for {pattern!r} in {bytes(buf[since:])!r}")
 
     try:
         # Wait for initial prompt A .. B
@@ -129,18 +143,17 @@ source {term_zsh!r}
         )
 
         # Command 3: sleep 10 interrupted by Ctrl+C -> D;130
+        since = len(buf)
         os.write(master, b"sleep 10\n")
-        read_until(rb"\x1b\]133;D;42\x07.*?\x1b\]133;C\x07")
+        read_until(rb"\x1b\]133;C\x07", since=since)
         time.sleep(0.1)
         os.write(master, b"\x03")
-        read_until(rb"\x1b\]133;D;130\x07.*?\x1b\]133;B\x07")
+        read_until(rb"\x1b\]133;D;130\x07.*?\x1b\]133;B\x07", since=since)
 
         # Check user hooks & single B mark in PS1
-        os.write(
-            master,
-            b'print -r -- "HOOKS=$_user_precmd_ran:$_user_preexec_ran:BMARKS=${#${(M)${(s::)PS1}:#\x1b}}"\n',
-        )
-        read_until(rb"HOOKS=[0-9]+:[0-9]+:")
+        since = len(buf)
+        os.write(master, b"_check_hooks\n")
+        read_until(rb"HOOKS=[0-9]+:[0-9]+:BMARKS=[0-9]+\r?\n.*?\x1b\]133;B\x07", since=since)
 
         # U3.3 zle widget test with fake term-ai on PATH (exit 0, 4, 1)
         fake_bin = os.path.join(zdotdir, "bin")
@@ -162,23 +175,28 @@ elif q == "fail":
 sys.exit(3)
 """)
         os.chmod(fake_ai, 0o755)
+        since = len(buf)
         os.write(master, f'export PATH="{fake_bin}:$PATH"\n'.encode())
-        read_until(rb"\x1b\]133;B\x07")
+        read_until(rb"\x1b\]133;D;0\x07.*?\x1b\]133;B\x07", since=since)
 
         # Exit 0 replaces BUFFER with suggested command
+        since = len(buf)
         os.write(master, b"ok\x07")
-        read_until(rb"echo suggested")
+        read_until(rb"echo suggested", since=since)
+        since = len(buf)
         os.write(master, b"\n")
-        read_until(rb"suggested\r?\n")
+        read_until(rb"\x1b\]133;C\x07.*?suggested\r?\n.*?\x1b\]133;B\x07", since=since)
 
         # Exit 4 replaces BUFFER with commented command and warns
+        since = len(buf)
         os.write(master, b"danger\x07")
-        read_until(rb"comando peligroso: quita el # si de verdad lo quieres")
+        read_until(rb"comando peligroso: quita el # si de verdad lo quieres", since=since)
         os.write(master, b"\x15")  # Ctrl+U clear line
 
         # Exit 1 keeps BUFFER and shows stderr via zle -M
+        since = len(buf)
         os.write(master, b"fail\x07")
-        read_until(rb"no hay servidor de IA local")
+        read_until(rb"no hay servidor de IA local", since=since)
         os.write(master, b"\x15")
 
         os.write(master, b"exit\n")
@@ -200,12 +218,13 @@ sys.exit(3)
     )
 
     assert raw.count(b"\x1b]133;B\x07TESTPROMPT") == 0
-    # Verify PS1 only contains one B mark (even though sourced twice)
-    ps1_b_count = None
-    # Check hook counters
-    m_hooks = re.search(rb"HOOKS=(\d+):(\d+):", raw)
+    # Verify user hooks and single B mark in PS1 (even though sourced twice)
+    m_hooks = re.search(rb"HOOKS=(\d+):(\d+):BMARKS=(\d+)", raw)
     assert m_hooks and int(m_hooks.group(1)) >= 4 and int(m_hooks.group(2)) >= 3, (
         f"existing precmd/preexec hooks were clobbered: {raw!r}"
+    )
+    assert int(m_hooks.group(3)) == 1, (
+        f"PS1 should contain exactly 1 OSC 133;B mark after double sourcing, got {m_hooks.group(3)}"
     )
 
 print("PASS: shell/term.zsh OSC 133 ordering, idempotency, hooks, empty Enter, Ctrl+C")
