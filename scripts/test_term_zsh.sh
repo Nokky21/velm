@@ -220,10 +220,11 @@ sys.exit(3)
                 if not chunk:
                     break
                 buf.extend(chunk)
-        if proc.poll() is None:
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
             proc.terminate()
             raise TimeoutError(f"zsh did not exit cleanly; tail={bytes(buf[since:])!r}")
-        proc.wait(timeout=2)
     finally:
         os.close(master)
 
