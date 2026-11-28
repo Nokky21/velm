@@ -50,6 +50,7 @@ with tempfile.TemporaryDirectory() as zdotdir:
     with open(zshrc, "w", encoding="utf-8") as f:
         f.write(f"""
 unsetopt BEEP
+bindkey -e
 PROMPT_EOL_MARK=''
 PS1='TESTPROMPT> '
 _user_precmd_ran=0
@@ -105,7 +106,10 @@ _check_hooks() {{
                 return
             r, _, _ = select.select([master], [], [], 0.1)
             if r:
-                chunk = os.read(master, 4096)
+                try:
+                    chunk = os.read(master, 4096)
+                except OSError:
+                    break
                 if not chunk:
                     break
                 buf.extend(chunk)
@@ -191,16 +195,35 @@ sys.exit(3)
         since = len(buf)
         os.write(master, b"danger\x07")
         read_until(rb"comando peligroso: quita el # si de verdad lo quieres", since=since)
-        os.write(master, b"\x15")  # Ctrl+U clear line
+        since = len(buf)
+        os.write(master, b"\x15\n")  # Ctrl+U clear line and return to clean prompt
+        read_until(rb"\x1b\]133;B\x07", since=since)
 
         # Exit 1 keeps BUFFER and shows stderr via zle -M
         since = len(buf)
         os.write(master, b"fail\x07")
         read_until(rb"no hay servidor de IA local", since=since)
-        os.write(master, b"\x15")
+        since = len(buf)
+        os.write(master, b"\x15\n")
+        read_until(rb"\x1b\]133;B\x07", since=since)
 
-        os.write(master, b"exit\n")
-        proc.wait(timeout=5)
+        since = len(buf)
+        os.write(master, b"exit 0\n")
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline and proc.poll() is None:
+            r, _, _ = select.select([master], [], [], 0.1)
+            if r:
+                try:
+                    chunk = os.read(master, 4096)
+                except OSError:
+                    break
+                if not chunk:
+                    break
+                buf.extend(chunk)
+        if proc.poll() is None:
+            proc.terminate()
+            raise TimeoutError(f"zsh did not exit cleanly; tail={bytes(buf[since:])!r}")
+        proc.wait(timeout=2)
     finally:
         os.close(master)
 
